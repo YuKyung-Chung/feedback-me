@@ -28,6 +28,11 @@
     <label>자기소개서</label>
     <textarea id="coverLetter" placeholder="자기소개서 내용을 입력하세요..."></textarea>
 </div>
+<!-- 기존 button 위에 추가 -->
+<div class="form-group">
+    <label>이력서 / 포트폴리오 첨부 <span style="color:#888; font-weight:normal;">(선택, PDF 또는 DOCX)</span></label>
+    <input type="file" id="file" accept=".pdf,.docx"/>
+</div>
 <button onclick="submitFeedback()">피드백 받기</button>
 
 <div id="loading">⏳ AI가 분석 중입니다. 잠시만 기다려주세요...</div>
@@ -37,6 +42,7 @@
     async function submitFeedback() {
         const url = document.getElementById('url').value;
         const coverLetter = document.getElementById('coverLetter').value;
+        const file = document.getElementById('file').files[0];
 
         if (!url || !coverLetter) {
             alert('URL과 자기소개서를 모두 입력해주세요.');
@@ -46,10 +52,14 @@
         document.getElementById('loading').style.display = 'block';
         document.getElementById('result').style.display = 'none';
 
+        const formData = new FormData();
+        formData.append('url', url);
+        formData.append('coverLetter', coverLetter);
+        if (file) formData.append('file', file);
+
         const response = await fetch('/api/feedback', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, coverLetter })
+            body: formData
         });
 
         const text = await response.text();
