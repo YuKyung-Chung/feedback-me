@@ -1,5 +1,6 @@
 package com.jyk.feedbackme.controller;
 
+import com.jyk.feedbackme.dto.FeedbackRequest;
 import com.jyk.feedbackme.service.GeminiService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -10,19 +11,21 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api")
-@RequiredArgsConstructor
 public class FeedbackController {
 
     private final GeminiService geminiService;
 
-    @PostMapping("/feedback")
-    public ResponseEntity<String> getFeedback(@RequestBody FeedbackRequest request) throws Exception{
-        String result = geminiService.getFeedBack(
-                request.jobDescription(),
-                request.coverLetter()
-        );
-        return ResponseEntity.ok(result);
+    public FeedbackController(GeminiService geminiService) {
+        this.geminiService = geminiService;
     }
 
-    public record FeedbackRequest(String jobDescription, String coverLetter) {}
+    @PostMapping("/feedback")
+    public ResponseEntity<String> createFeedback(@RequestBody FeedbackRequest request) {
+        try {
+            String result = geminiService.getFeedBack(request.getJobDescription(), request.getCoverLetter());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("피드백 생성 중 오류가 발생했습니다: " + e.getMessage());
+        }
+    }
 }

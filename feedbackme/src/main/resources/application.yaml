@@ -1,6 +1,23 @@
 spring:
   application:
     name: feedbackme
+  config:
+    import: optional:classpath:application-secret.yaml
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/feedbackme?useSSL=false&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
+    username: user
+    password: ${MYSQL_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: update # 개발 초기 단계이므로 엔티티 변경 시 테이블을 자동으로 수정하도록 설정
+    show-sql: true     # 실행되는 SQL을 콘솔에 출력
+    properties:
+      hibernate:
+        format_sql: true # SQL을 보기 좋게 포맷팅
+        default_batch_fetch_size: 100 # 추후 성능 최적화를 위한 옵션
 
 gemini:
   api-key: ${GEMINI_API_KEY}

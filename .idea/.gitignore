@@ -8,3 +8,9 @@
 # Datasource local storage ignored files
 /dataSources/
 /dataSources.local.xml
+
+# 환경변수/API키
+.env
+# 도커 데이터 (용량 큼)
+docker/mysql/data/
+application-secret.yaml
