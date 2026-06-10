@@ -38,14 +38,38 @@ public class GeminiService {
 
         // 2. 프롬프트 조립 (%s 누락 부분 수정 반영)
         String prompt = """
-                다음 채용 공고와 자소서를 분석해서 개선점을 알려줘.
-                
-                [채용 공고]
-                %s
-                
-                [자기소개서]
-                %s
-                """.formatted(jobDescription, coverLetter);
+            당신은 채용 전문가입니다. 아래 채용공고와 자기소개서를 분석하여 다음 항목별로 구체적인 피드백을 제공해주세요.
+            
+            [채용 공고]
+            %s
+            
+            [자기소개서]
+            %s
+            
+            다음 형식으로 답변해주세요:
+            
+            ## 1. 직무 적합성 (채용공고 요구사항과 자소서 매칭도)
+            - 잘된 점:
+            - 부족한 점:
+            - 개선 제안:
+            
+            ## 2. 표현 및 문장력
+            - 잘된 점:
+            - 부족한 점:
+            - 개선 제안:
+            
+            ## 3. 논리성 및 구성
+            - 잘된 점:
+            - 부족한 점:
+            - 개선 제안:
+            
+            ## 4. 차별화 포인트
+            - 잘된 점:
+            - 부족한 점:
+            - 개선 제안:
+            
+            ## 5. 종합 의견 및 우선 개선사항
+            """.formatted(jobDescription, coverLetter);
 
         String body = """
                 {
@@ -70,9 +94,19 @@ public class GeminiService {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             String responseBody = response.body();
 
-            // 4. 호출 성공 시 결과 업데이트 및 상태 변경 (COMPLETED)
-            history.completeFeedback(responseBody);
-            return responseBody;
+            // 4. JSON에서 텍스트만 추출
+            org.json.JSONObject json = new org.json.JSONObject(responseBody);
+            String text = json
+                    .getJSONArray("candidates")
+                    .getJSONObject(0)
+                    .getJSONObject("content")
+                    .getJSONArray("parts")
+                    .getJSONObject(0)
+                    .getString("text");
+
+            // 5. 호출 성공 시 결과 업데이트 및 상태 변경 (COMPLETED)
+            history.completeFeedback(text);
+            return text;
 
         } catch (Exception e) {
             // 호출 실패 시 상태 변경 (FAILED)
