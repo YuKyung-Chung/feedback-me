@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>FeedbackMe - 자소서 피드백</title>
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1 { color: #333; text-align: center; }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; font-weight: bold; margin-bottom: 6px; }
+        input[type="text"], textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+        textarea { height: 200px; resize: vertical; }
+        button { width: 100%; padding: 12px; background-color: #4CAF50; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }
+        button:hover { background-color: #45a049; }
+        #result { margin-top: 30px; padding: 20px; background: #f9f9f9; border-radius: 6px; border: 1px solid #ddd; white-space: pre-wrap; display: none; }
+        #loading { text-align: center; display: none; color: #888; margin-top: 20px; }
+    </style>
+</head>
+<body>
+<h1>📝 FeedbackMe</h1>
+<p style="text-align:center; color:#666;">채용공고 URL과 자기소개서를 입력하면 AI가 피드백을 드려요</p>
+
+<div class="form-group">
+    <label>채용공고 URL</label>
+    <input type="text" id="url" placeholder="https://www.saramin.co.kr/..."/>
+</div>
+<div class="form-group">
+    <label>자기소개서</label>
+    <textarea id="coverLetter" placeholder="자기소개서 내용을 입력하세요..."></textarea>
+</div>
+<button onclick="submitFeedback()">피드백 받기</button>
+
+<div id="loading">⏳ AI가 분석 중입니다. 잠시만 기다려주세요...</div>
+<div id="result"></div>
+
+<script>
+    async function submitFeedback() {
+        const url = document.getElementById('url').value;
+        const coverLetter = document.getElementById('coverLetter').value;
+
+        if (!url || !coverLetter) {
+            alert('URL과 자기소개서를 모두 입력해주세요.');
+            return;
+        }
+
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('result').style.display = 'none';
+
+        const response = await fetch('/api/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, coverLetter })
+        });
+
+        const text = await response.text();
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('result').style.display = 'block';
+        document.getElementById('result').innerText = text;
+    }
+</script>
+</body>
+</html>
