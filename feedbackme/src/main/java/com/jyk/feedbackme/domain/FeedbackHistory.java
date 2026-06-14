@@ -25,6 +25,12 @@ public class FeedbackHistory {
     @Column(columnDefinition = "TEXT")
     private String coverLetter; //자기소개서 원문
 
+    @Column(columnDefinition = "LONGTEXT")
+    private String attachmentText; // 큰 텍스트를 담기 위해 LONGTEXT 활용
+
+    @Column(columnDefinition = "LONGTEXT")
+    private String base64Images; // Base64 이미지 목록을 JSON이나 구분자로 길게 저장
+
     @Column(columnDefinition = "TEXT")
     private String feedbackResult; // Gemini API가 반환한 결과 리포트
 
@@ -35,9 +41,11 @@ public class FeedbackHistory {
     private LocalDateTime updatedAt;
 
     @Builder
-    public FeedbackHistory(String jobDescription, String coverLetter, FeedbackStatus status) {
+    public FeedbackHistory(String jobDescription, String coverLetter, String attachmentText, String base64Images, FeedbackStatus status) {
         this.jobDescription = jobDescription;
         this.coverLetter = coverLetter;
+        this.attachmentText = attachmentText;
+        this.base64Images = base64Images;
         this.status = status;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();

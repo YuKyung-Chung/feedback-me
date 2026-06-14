@@ -17,3 +17,9 @@ services:
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
+  # Redis 추가
+  redis:
+    image: redis:alpine
+    container_name: feedbackme-redis
+    ports:
+      - "6379:6379"

@@ -4,6 +4,7 @@ import com.jyk.feedbackme.domain.FeedbackHistory;
 import com.jyk.feedbackme.domain.FeedbackStatus;
 import com.jyk.feedbackme.repository.FeedbackHistoryRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,29 +20,50 @@ public class GeminiService {
     @Value("${gemini.api-key}")
     private String apiKey;
 
-    private final HttpClient httpClient = HttpClient.newHttpClient();
     private final FeedbackHistoryRepository feedbackHistoryRepository;
+    private final RedisTemplate<String, String> redisTemplate;
+    private final HttpClient httpClient = HttpClient.newHttpClient();
 
-    public GeminiService(FeedbackHistoryRepository feedbackHistoryRepository) {
+    private static final String QUEUE_KEY = "feedback:queue";
+
+    public GeminiService(FeedbackHistoryRepository feedbackHistoryRepository, RedisTemplate<String, String> redisTemplate) {
         this.feedbackHistoryRepository = feedbackHistoryRepository;
+        this.redisTemplate = redisTemplate;
     }
 
-    // 텍스트 기반 피드백 (파일 없거나 텍스트 추출 가능한 경우)
     @Transactional
-    public String getFeedBack(String jobDescription, String coverLetter, String attachmentText) throws Exception {
+    public Long enqueueFeedbackRequest(String jobDescription, String coverLetter, String attachmentText, List<String> base64Images) {
+        String imagesCsv = null;
+        if (base64Images != null && !base64Images.isEmpty()) {
+            imagesCsv = String.join(",", base64Images);
+        }
+
+        // 1. 접수 창구에서 최초 1회만 DB 저장 수행
         FeedbackHistory history = FeedbackHistory.builder()
                 .jobDescription(jobDescription)
                 .coverLetter(coverLetter)
+                .attachmentText(attachmentText)
+                .base64Images(imagesCsv)
                 .status(FeedbackStatus.PENDING)
                 .build();
+
         feedbackHistoryRepository.save(history);
 
+        // 2. Redis 큐에 ID 삽입
+        redisTemplate.opsForList().rightPush(QUEUE_KEY, history.getId().toString());
+
+        return history.getId();
+    }
+
+    // [수정] 외부에서 조회한 history 객체를 파라미터로 받도록 변경, 신규 save 로직 제거
+    @Transactional
+    public String getFeedBack(String jobDescription, String coverLetter, String attachmentText, FeedbackHistory history) throws Exception {
         String attachmentSection = (attachmentText != null && !attachmentText.isBlank())
                 ? "\n[이력서 / 포트폴리오]\n" + attachmentText + "\n\n위 첨부 파일 내용도 반드시 참고하여 피드백해주세요."
                 : "";
 
         String prompt = """
-                당신은 채용 전문가입니다. 아래 채용공고와 자기소개서를 분석하여 다음 항목별로 구체적인 피드백을 제공해주세요.
+                당신은 채용 전문가입니다. 아래 채용공고และ 자기소개서를 분석하여 다음 항목별로 구체적인 피드백을 제공해주세요.
                 
                 [채용 공고]
                 %s
@@ -90,16 +112,9 @@ public class GeminiService {
         return callGemini(body, history);
     }
 
-    // Vision 기반 피드백 (이미지 기반 PDF인 경우)
+    // [수정] 외부에서 조회한 history 객체를 파라미터로 받도록 변경, 신규 save 로직 제거
     @Transactional
-    public String getFeedBackWithVision(String jobDescription, String coverLetter, List<String> base64Images) throws Exception {
-        FeedbackHistory history = FeedbackHistory.builder()
-                .jobDescription(jobDescription)
-                .coverLetter(coverLetter)
-                .status(FeedbackStatus.PENDING)
-                .build();
-        feedbackHistoryRepository.save(history);
-
+    public String getFeedBackWithVision(String jobDescription, String coverLetter, List<String> base64Images, FeedbackHistory history) throws Exception {
         StringBuilder imageParts = new StringBuilder();
         for (String base64 : base64Images) {
             imageParts.append("""
@@ -167,7 +182,7 @@ public class GeminiService {
         return callGemini(body, history);
     }
 
-    // 공통 Gemini API 호출
+    // 공통 Gemini API 호출 (전달받은 원래 history 객체의 내용을 채워줌)
     private String callGemini(String body, FeedbackHistory history) throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" + apiKey))
@@ -175,25 +190,20 @@ public class GeminiService {
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
 
-        try {
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            String responseBody = response.body();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        String responseBody = response.body();
 
-            org.json.JSONObject json = new org.json.JSONObject(responseBody);
-            String text = json
-                    .getJSONArray("candidates")
-                    .getJSONObject(0)
-                    .getJSONObject("content")
-                    .getJSONArray("parts")
-                    .getJSONObject(0)
-                    .getString("text");
+        org.json.JSONObject json = new org.json.JSONObject(responseBody);
+        String text = json
+                .getJSONArray("candidates")
+                .getJSONObject(0)
+                .getJSONObject("content")
+                .getJSONArray("parts")
+                .getJSONObject(0)
+                .getString("text");
 
-            history.completeFeedback(text);
-            return text;
-
-        } catch (Exception e) {
-            history.failFeedback();
-            throw e;
-        }
+        // 호출 성공 시, 처음 만들어졌던 원래 history 엔티티 내부 필드에 값을 세팅
+        history.completeFeedback(text);
+        return text;
     }
 }
