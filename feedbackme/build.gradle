@@ -18,6 +18,10 @@ repositories {
 }
 
 dependencies {
+	// 스프링 부트 모니터링 및 메트릭 수집을 위한 의존성
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'io.micrometer:micrometer-registry-prometheus'
+
 	//Redis
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 

@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 5s # 5초마다 메트릭을 수집 (테스트를 위해 짧게 설정)
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: 'spring-boot-app'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      # 대다수의 Windows/Mac 환경 Docker에서 호스트 PC(스프링 부트 구동 중)에 접근하는 도메인입니다.
+      - targets: ['host.docker.internal:8080']
