@@ -27,4 +27,5 @@ replay_pid*
 .env
 # 도커 데이터 (용량 큼)
 docker/mysql/data/
+docker/grafana/data/
 application-secret.yaml

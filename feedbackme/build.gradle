@@ -18,6 +18,7 @@ repositories {
 }
 
 dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	// 스프링 부트 모니터링 및 메트릭 수집을 위한 의존성
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'io.micrometer:micrometer-registry-prometheus'
@@ -31,6 +32,7 @@ dependencies {
 
 	// jsoup
 	implementation 'org.jsoup:jsoup:1.17.2'
+	implementation 'org.json:json:20240303'
 
 	//JSON 파싱 라이브러리
 	implementation 'org.json:json:20240303'
