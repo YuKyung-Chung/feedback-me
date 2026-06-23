@@ -19,6 +19,8 @@ pipeline {
                 sh '''
                     docker run --rm \
                         -u "$(id -u):$(id -g)" \
+                        -e HOME=/workspace \
+                        -e GRADLE_USER_HOME=/workspace/.gradle \
                         -v "$PWD/feedbackme:/workspace" \
                         -w /workspace \
                         eclipse-temurin:21-jdk \
