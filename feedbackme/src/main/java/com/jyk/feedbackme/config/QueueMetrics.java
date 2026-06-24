@@ -2,10 +2,12 @@ package com.jyk.feedbackme.config;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
 @Component // 스프링이 켜질 때 이 클래스를 자동으로 빈(Bean)으로 등록합니다.
+@Profile("!test")
 public class QueueMetrics {
 
     private final RedisTemplate<String, String> redisTemplate;

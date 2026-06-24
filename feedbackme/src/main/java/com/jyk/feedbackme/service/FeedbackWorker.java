@@ -2,6 +2,7 @@ package com.jyk.feedbackme.service;
 
 import com.jyk.feedbackme.domain.FeedbackHistory;
 import com.jyk.feedbackme.repository.FeedbackHistoryRepository;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -11,6 +12,7 @@ import java.util.Arrays;
 import java.util.List;
 
 @Component
+@Profile("!test")
 public class FeedbackWorker {
 
     private final RedisTemplate<String, String> redisTemplate;
