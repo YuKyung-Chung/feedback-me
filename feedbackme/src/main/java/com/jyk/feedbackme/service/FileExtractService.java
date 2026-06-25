@@ -5,6 +5,8 @@ import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -15,31 +17,33 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Service
 public class FileExtractService {
 
+    private static final Logger log = LoggerFactory.getLogger(FileExtractService.class);
+
     public String extract(MultipartFile file) throws Exception {
         String filename = file.getOriginalFilename();
 
-        if (filename == null) throw new IllegalArgumentException("파일명이 없습니다.");
+        if (filename == null) throw new IllegalArgumentException("File name is missing.");
 
-        if (filename.endsWith(".pdf")) {
+        String lowerFilename = filename.toLowerCase(Locale.ROOT);
+        if (lowerFilename.endsWith(".pdf")) {
             return extractPdf(file.getInputStream());
-        } else if (filename.endsWith(".docx")) {
+        } else if (lowerFilename.endsWith(".docx")) {
             return extractDocx(file.getInputStream());
         } else {
-            throw new IllegalArgumentException("PDF 또는 DOCX 파일만 지원합니다.");
+            throw new IllegalArgumentException("Only PDF and DOCX files are supported.");
         }
     }
 
     private String extractPdf(InputStream is) throws Exception {
         try (PDDocument doc = org.apache.pdfbox.Loader.loadPDF(is.readAllBytes())) {
             String text = new PDFTextStripper().getText(doc);
-            System.out.println("=== PDF 페이지 수: " + doc.getNumberOfPages());
-            System.out.println("=== 추출된 글자 수: " + text.length());
-            System.out.println("=== 앞 500자: " + text.substring(0, Math.min(500, text.length())));
+            log.info("Extracted PDF text. pages={}, characters={}", doc.getNumberOfPages(), text.length());
             return text;
         }
     }

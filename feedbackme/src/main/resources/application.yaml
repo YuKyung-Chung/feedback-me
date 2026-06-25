@@ -26,6 +26,12 @@ spring:
 gemini:
   api-key: ${GEMINI_API_KEY}
 
+feedback:
+  queue:
+    poll-delay-ms: 1000
+  cache:
+    result-ttl-seconds: 604800
+
 management:
   endpoints:
     web:

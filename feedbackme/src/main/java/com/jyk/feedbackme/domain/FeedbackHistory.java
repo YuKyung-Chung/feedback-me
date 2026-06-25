@@ -1,6 +1,13 @@
 package com.jyk.feedbackme.domain;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -8,11 +15,10 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-// feedback_history 테이블과 1:1로 매핑될 핵심 엔티티 클래스
 @Entity
-@Table(name="feedback_history")
+@Table(name = "feedback_history")
 @Getter
-@NoArgsConstructor(access= AccessLevel.PROTECTED)
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class FeedbackHistory {
 
     @Id
@@ -20,22 +26,22 @@ public class FeedbackHistory {
     private Long id;
 
     @Column(columnDefinition = "TEXT")
-    private String jobDescription; //채용 공고 원문
+    private String jobDescription;
 
     @Column(columnDefinition = "TEXT")
-    private String coverLetter; //자기소개서 원문
+    private String coverLetter;
 
     @Column(columnDefinition = "LONGTEXT")
-    private String attachmentText; // 큰 텍스트를 담기 위해 LONGTEXT 활용
+    private String attachmentText;
 
     @Column(columnDefinition = "LONGTEXT")
-    private String base64Images; // Base64 이미지 목록을 JSON이나 구분자로 길게 저장
+    private String base64Images;
 
     @Column(columnDefinition = "TEXT")
-    private String feedbackResult; // Gemini API가 반환한 결과 리포트
+    private String feedbackResult;
 
     @Enumerated(EnumType.STRING)
-    private FeedbackStatus status; //PENDING, PROCESSING, COMPLETED, FAILED 상태
+    private FeedbackStatus status;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -51,17 +57,19 @@ public class FeedbackHistory {
         this.updatedAt = LocalDateTime.now();
     }
 
-    // 비동기 처리 완료 후 결과를 저장하고 상태를 완료로 바꾸기 위한 메서드
-    public void completeFeedback(String feedbackResult){
+    public void startProcessing() {
+        this.status = FeedbackStatus.PROCESSING;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void completeFeedback(String feedbackResult) {
         this.feedbackResult = feedbackResult;
         this.status = FeedbackStatus.COMPLETED;
         this.updatedAt = LocalDateTime.now();
     }
 
-    // 실패 시 상태를 변경하기 위한 메서드
-    public void failFeedback(){
+    public void failFeedback() {
         this.status = FeedbackStatus.FAILED;
         this.updatedAt = LocalDateTime.now();
     }
-
 }
