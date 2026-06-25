@@ -1,7 +1,4 @@
-.gradle
-build
-out
-.idea
-*.iml
-*.log
-src/main/resources/application-secret.yaml
+.gradle/
+build/
+frontend/node_modules/
+frontend/dist/

@@ -1,3 +1,12 @@
+FROM node:22-alpine AS frontend-build
+WORKDIR /frontend
+
+COPY frontend/package.json ./
+RUN npm install
+
+COPY frontend ./
+RUN npm run build
+
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
 
@@ -6,6 +15,7 @@ COPY gradle ./gradle
 RUN chmod +x ./gradlew
 
 COPY src ./src
+COPY --from=frontend-build /frontend/dist ./src/main/resources/static
 RUN ./gradlew clean bootJar --no-daemon
 
 FROM eclipse-temurin:21-jre

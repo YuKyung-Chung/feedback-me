@@ -29,3 +29,7 @@ replay_pid*
 docker/mysql/data/
 docker/grafana/data/
 application-secret.yaml
+
+# Frontend dependencies and build output
+feedbackme/frontend/node_modules/
+feedbackme/frontend/dist/

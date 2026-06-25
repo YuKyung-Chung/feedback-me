@@ -38,8 +38,6 @@ dependencies {
 	implementation 'org.json:json:20240303'
 
 	//Thymeleaf
-	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
-
 	// PDF 텍스트 추출
 	implementation 'org.apache.pdfbox:pdfbox:3.0.2'
 
