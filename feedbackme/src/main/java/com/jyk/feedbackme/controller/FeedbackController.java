@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -40,27 +41,34 @@ public class FeedbackController {
     @PostMapping(value = "/feedback", consumes = "multipart/form-data")
     public ResponseEntity<?> createFeedback(
             @RequestParam("url") String url,
-            @RequestParam("coverLetter") String coverLetter,
             @RequestParam(value = "file", required = false) MultipartFile file) {
         try {
-            String jobDescription = null;
-            if (url != null && !url.isBlank()) {
-                jobDescription = crawlingService.crawl(url);
+            if (url == null || url.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Job posting URL is required."
+                ));
             }
+
+            if (file == null || file.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Resume or portfolio file is required."
+                ));
+            }
+
+            String jobDescription = null;
+            jobDescription = crawlingService.crawl(url);
 
             String attachmentText = null;
             List<String> base64Images = null;
-            if (file != null && !file.isEmpty()) {
-                String filename = file.getOriginalFilename();
-                String lowerFilename = filename == null ? "" : filename.toLowerCase(Locale.ROOT);
-                if (lowerFilename.endsWith(".pdf")) {
-                    base64Images = fileExtractService.pdfToBase64Images(file);
-                } else {
-                    attachmentText = fileExtractService.extract(file);
-                }
+            String filename = file.getOriginalFilename();
+            String lowerFilename = filename == null ? "" : filename.toLowerCase(Locale.ROOT);
+            if (lowerFilename.endsWith(".pdf")) {
+                base64Images = fileExtractService.pdfToBase64Images(file);
+            } else {
+                attachmentText = fileExtractService.extract(file);
             }
 
-            Long historyId = geminiService.enqueueFeedbackRequest(jobDescription, coverLetter, attachmentText, base64Images);
+            Long historyId = geminiService.enqueueFeedbackRequest(jobDescription, attachmentText, base64Images);
 
             return ResponseEntity.accepted().body(Map.of(
                     "message", "Feedback request accepted.",
@@ -81,10 +89,16 @@ public class FeedbackController {
             return ResponseEntity.notFound().build();
         }
 
-        return ResponseEntity.ok(Map.of(
-                "status", history.getStatus().name(),
-                "result", history.getFeedbackResult() != null ? history.getFeedbackResult() : "",
-                "updatedAt", history.getUpdatedAt().toString()
-        ));
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("status", history.getStatus().name());
+        response.put("result", history.getFeedbackResult() != null ? history.getFeedbackResult() : "");
+        response.put("updatedAt", history.getUpdatedAt().toString());
+
+        Integer queuePosition = geminiService.getQueuePosition(id);
+        if (queuePosition != null) {
+            response.put("queuePosition", queuePosition);
+        }
+
+        return ResponseEntity.ok(response);
     }
 }

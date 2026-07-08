@@ -69,9 +69,9 @@ public class FeedbackWorker {
         String resultText;
         if (history.getBase64Images() != null && !history.getBase64Images().isBlank()) {
             List<String> base64Images = Arrays.asList(history.getBase64Images().split(","));
-            resultText = geminiService.getFeedBackWithVision(history.getJobDescription(), history.getCoverLetter(), base64Images);
+            resultText = geminiService.getFeedBackWithVision(history.getJobDescription(), base64Images);
         } else {
-            resultText = geminiService.getFeedBack(history.getJobDescription(), history.getCoverLetter(), history.getAttachmentText());
+            resultText = geminiService.getFeedBack(history.getJobDescription(), history.getAttachmentText());
         }
 
         complete(historyId, resultText);

@@ -42,14 +42,13 @@ public class GeminiService {
     }
 
     @Transactional
-    public Long enqueueFeedbackRequest(String jobDescription, String coverLetter, String attachmentText, List<String> base64Images) {
+    public Long enqueueFeedbackRequest(String jobDescription, String attachmentText, List<String> base64Images) {
         String imagesCsv = toCsv(base64Images);
-        String cacheKey = createCacheKey(jobDescription, coverLetter, attachmentText, imagesCsv);
+        String cacheKey = createCacheKey(jobDescription, attachmentText, imagesCsv);
         String cachedResult = redisTemplate.opsForValue().get(cacheKey);
 
         FeedbackHistory history = FeedbackHistory.builder()
                 .jobDescription(jobDescription)
-                .coverLetter(coverLetter)
                 .attachmentText(attachmentText)
                 .base64Images(imagesCsv)
                 .status(FeedbackStatus.PENDING)
@@ -74,46 +73,85 @@ public class GeminiService {
         redisTemplate.opsForValue().set(createCacheKey(history), result, Duration.ofSeconds(resultCacheTtlSeconds));
     }
 
-    public String getFeedBack(String jobDescription, String coverLetter, String attachmentText) throws Exception {
+    public Integer getQueuePosition(Long historyId) {
+        List<String> queuedIds = redisTemplate.opsForList().range(QUEUE_KEY, 0, -1);
+        if (queuedIds == null || queuedIds.isEmpty()) {
+            return null;
+        }
+
+        String targetId = historyId.toString();
+        for (int index = 0; index < queuedIds.size(); index++) {
+            if (targetId.equals(queuedIds.get(index))) {
+                return index + 1;
+            }
+        }
+
+        return null;
+    }
+
+    public String getFeedBack(String jobDescription, String attachmentText) throws Exception {
         String attachmentSection = (attachmentText != null && !attachmentText.isBlank())
-                ? "\n[Attachment]\n" + attachmentText + "\n\nPlease use the attachment content in your feedback."
+                ? "\n[Resume or Portfolio]\n" + attachmentText + "\n"
                 : "";
 
         String prompt = """
-                You are a hiring expert. Analyze the job posting and cover letter below,
-                then provide concrete feedback in Korean.
+                You are a senior hiring manager and career strategist.
+                Analyze the job posting and the applicant's resume or portfolio,
+                then provide a concrete job-fit report in Korean.
 
                 [Job Posting]
                 %s
-
-                [Cover Letter]
-                %s
                 %s
 
-                Respond in this format:
+                Important rules:
+                - Do not evaluate a cover letter. This product does not collect cover letters.
+                - Base the analysis only on the job posting and the attached resume/portfolio.
+                - If required information is missing, say what is missing and how the applicant should supplement it.
+                - Give a job fit score out of 10 with clear evidence.
 
-                ## 1. Job fit
-                - Strengths:
-                - Gaps:
-                - Suggestions:
+                Respond in this exact format:
 
-                ## 2. Expression and sentences
-                - Strengths:
-                - Gaps:
-                - Suggestions:
+                ## 1. 채용공고 핵심 요약
+                - 회사/서비스 이해:
+                - 주요 업무:
+                - 지원 자격:
+                - 우대 사항:
+                - 핵심 기술/역량 키워드:
 
-                ## 3. Logic and structure
-                - Strengths:
-                - Gaps:
-                - Suggestions:
+                ## 2. 지원자 자료 요약
+                - 경력/프로젝트:
+                - 기술 스택:
+                - 문제 해결 경험:
+                - 협업/운영 경험:
 
-                ## 4. Differentiation
-                - Strengths:
-                - Gaps:
-                - Suggestions:
+                ## 3. 직무 적합도
+                - 점수: /10
+                - 점수 근거:
+                - 강하게 매칭되는 요구사항:
+                - 부족하거나 근거가 약한 요구사항:
 
-                ## 5. Overall opinion and priorities
-                """.formatted(jobDescription, coverLetter, attachmentSection);
+                ## 4. SWOT 기반 지원 전략
+                - Strength:
+                - Weakness:
+                - Opportunity:
+                - Threat:
+
+                ## 5. 보완해야 할 역량
+                - 우선순위 1:
+                - 우선순위 2:
+                - 우선순위 3:
+
+                ## 6. 차별화된 강점
+                - 강점:
+                - 공고와 연결하는 방법:
+
+                ## 7. 이력서/포트폴리오 개선 제안
+                - 추가하면 좋은 내용:
+                - 더 강조해야 할 내용:
+                - 줄이거나 정리하면 좋은 내용:
+
+                ## 8. 최종 지원 전략
+                """.formatted(jobDescription, attachmentSection);
 
         String body = """
                 {
@@ -130,7 +168,7 @@ public class GeminiService {
         return callGemini(body);
     }
 
-    public String getFeedBackWithVision(String jobDescription, String coverLetter, List<String> base64Images) throws Exception {
+    public String getFeedBackWithVision(String jobDescription, List<String> base64Images) throws Exception {
         StringBuilder imageParts = new StringBuilder();
         for (String base64 : base64Images) {
             imageParts.append("""
@@ -144,41 +182,64 @@ public class GeminiService {
         }
 
         String promptText = """
-                You are a hiring expert. Analyze the job posting, cover letter,
-                and attached resume or portfolio images, then provide concrete feedback in Korean.
+                You are a senior hiring manager and career strategist.
+                Analyze the job posting and the attached resume or portfolio images,
+                then provide a concrete job-fit report in Korean.
 
                 [Job Posting]
                 %s
 
-                [Cover Letter]
-                %s
+                Use the attached images as the applicant's resume or portfolio.
 
-                Use the attached images as supporting context.
+                Important rules:
+                - Do not evaluate a cover letter. This product does not collect cover letters.
+                - Base the analysis only on the job posting and the attached resume/portfolio images.
+                - If required information is missing, say what is missing and how the applicant should supplement it.
+                - Give a job fit score out of 10 with clear evidence.
 
-                Respond in this format:
+                Respond in this exact format:
 
-                ## 1. Job fit
-                - Strengths:
-                - Gaps:
-                - Suggestions:
+                ## 1. 채용공고 핵심 요약
+                - 회사/서비스 이해:
+                - 주요 업무:
+                - 지원 자격:
+                - 우대 사항:
+                - 핵심 기술/역량 키워드:
 
-                ## 2. Expression and sentences
-                - Strengths:
-                - Gaps:
-                - Suggestions:
+                ## 2. 지원자 자료 요약
+                - 경력/프로젝트:
+                - 기술 스택:
+                - 문제 해결 경험:
+                - 협업/운영 경험:
 
-                ## 3. Logic and structure
-                - Strengths:
-                - Gaps:
-                - Suggestions:
+                ## 3. 직무 적합도
+                - 점수: /10
+                - 점수 근거:
+                - 강하게 매칭되는 요구사항:
+                - 부족하거나 근거가 약한 요구사항:
 
-                ## 4. Differentiation
-                - Strengths:
-                - Gaps:
-                - Suggestions:
+                ## 4. SWOT 기반 지원 전략
+                - Strength:
+                - Weakness:
+                - Opportunity:
+                - Threat:
 
-                ## 5. Overall opinion and priorities
-                """.formatted(jobDescription, coverLetter);
+                ## 5. 보완해야 할 역량
+                - 우선순위 1:
+                - 우선순위 2:
+                - 우선순위 3:
+
+                ## 6. 차별화된 강점
+                - 강점:
+                - 공고와 연결하는 방법:
+
+                ## 7. 이력서/포트폴리오 개선 제안
+                - 추가하면 좋은 내용:
+                - 더 강조해야 할 내용:
+                - 줄이거나 정리하면 좋은 내용:
+
+                ## 8. 최종 지원 전략
+                """.formatted(jobDescription);
 
         String body = """
                 {
@@ -197,8 +258,13 @@ public class GeminiService {
     }
 
     private String callGemini(String body) throws Exception {
+        String normalizedApiKey = apiKey == null ? "" : apiKey.trim();
+        if (normalizedApiKey.isBlank()) {
+            throw new IllegalStateException("Gemini API key is missing.");
+        }
+
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" + apiKey))
+                .uri(URI.create("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" + normalizedApiKey))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
@@ -223,15 +289,13 @@ public class GeminiService {
     private String createCacheKey(FeedbackHistory history) {
         return createCacheKey(
                 history.getJobDescription(),
-                history.getCoverLetter(),
                 history.getAttachmentText(),
                 history.getBase64Images()
         );
     }
 
-    private String createCacheKey(String jobDescription, String coverLetter, String attachmentText, String base64Images) {
+    private String createCacheKey(String jobDescription, String attachmentText, String base64Images) {
         String raw = normalize(jobDescription)
-                + "\n---cover-letter---\n" + normalize(coverLetter)
                 + "\n---attachment---\n" + normalize(attachmentText)
                 + "\n---images---\n" + normalize(base64Images);
         return CACHE_PREFIX + sha256(raw);

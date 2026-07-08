@@ -28,9 +28,6 @@ public class FeedbackHistory {
     @Column(columnDefinition = "TEXT")
     private String jobDescription;
 
-    @Column(columnDefinition = "TEXT")
-    private String coverLetter;
-
     @Column(columnDefinition = "LONGTEXT")
     private String attachmentText;
 
@@ -47,9 +44,8 @@ public class FeedbackHistory {
     private LocalDateTime updatedAt;
 
     @Builder
-    public FeedbackHistory(String jobDescription, String coverLetter, String attachmentText, String base64Images, FeedbackStatus status) {
+    public FeedbackHistory(String jobDescription, String attachmentText, String base64Images, FeedbackStatus status) {
         this.jobDescription = jobDescription;
-        this.coverLetter = coverLetter;
         this.attachmentText = attachmentText;
         this.base64Images = base64Images;
         this.status = status;
