@@ -9,6 +9,7 @@ import com.jyk.feedbackme.service.CrawlingService;
 import com.jyk.feedbackme.service.FileExtractService;
 import com.jyk.feedbackme.service.GeminiService;
 import com.jyk.feedbackme.service.AuthService;
+import com.jyk.feedbackme.service.CreditService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -34,17 +35,20 @@ public class FeedbackController {
     private final FileExtractService fileExtractService;
     private final FeedbackHistoryRepository feedbackHistoryRepository;
     private final AuthService authService;
+    private final CreditService creditService;
 
     public FeedbackController(GeminiService geminiService,
                               CrawlingService crawlingService,
                               FileExtractService fileExtractService,
                               FeedbackHistoryRepository feedbackHistoryRepository,
-                              AuthService authService) {
+                              AuthService authService,
+                              CreditService creditService) {
         this.geminiService = geminiService;
         this.crawlingService = crawlingService;
         this.fileExtractService = fileExtractService;
         this.feedbackHistoryRepository = feedbackHistoryRepository;
         this.authService = authService;
+        this.creditService = creditService;
     }
 
     @PostMapping(value = "/feedback", consumes = "multipart/form-data")
@@ -59,6 +63,7 @@ public class FeedbackController {
                         "message", "로그인이 필요합니다."
                 ));
             }
+            creditService.grantSignupCreditsIfMissing(user);
 
             if (url == null || url.isBlank()) {
                 return ResponseEntity.badRequest().body(Map.of(
@@ -69,6 +74,12 @@ public class FeedbackController {
             if (file == null || file.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of(
                         "message", "Resume or portfolio file is required."
+                ));
+            }
+
+            if (!creditService.hasAnalysisCredit(user)) {
+                return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(Map.of(
+                        "message", "분석권이 부족합니다. 분석권을 충전해 주세요."
                 ));
             }
 
@@ -102,6 +113,11 @@ public class FeedbackController {
                     "historyId", historyId
             ));
         } catch (Exception e) {
+            if ("분석권이 부족합니다.".equals(e.getMessage())) {
+                return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(Map.of(
+                        "message", "분석권이 부족합니다. 분석권을 충전해 주세요."
+                ));
+            }
             return ResponseEntity.internalServerError().body(Map.of(
                     "message", "Failed to accept feedback request.",
                     "error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()

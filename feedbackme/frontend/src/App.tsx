@@ -1,16 +1,19 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2,
+  CreditCard,
   Download,
   FileText,
   History,
   LogIn,
   LogOut,
   LoaderCircle,
+  Settings,
   Send,
   Sparkles,
   Upload,
   UserPlus,
+  Wallet,
   XCircle
 } from 'lucide-react';
 
@@ -55,7 +58,39 @@ type AuthResponse = {
   message?: string;
 };
 
+type CreditSummary = {
+  balance: number;
+  totalGranted: number;
+  totalPurchased: number;
+  totalUsed: number;
+};
+
+type PaymentProduct = {
+  code: string;
+  name: string;
+  credits: number;
+  amount: number;
+};
+
+type PaymentOrder = {
+  orderId: string;
+  productCode: string;
+  orderName: string;
+  amount: number;
+  creditAmount: number;
+  status: 'READY' | 'PAID' | 'FAILED';
+  requestedAt: string;
+  approvedAt: string;
+};
+
+type PaymentSummaryResponse = {
+  credit: CreditSummary;
+  products: PaymentProduct[];
+  devMode: boolean;
+};
+
 type ViewMode = 'input' | 'auth' | 'mypage' | 'result';
+type MyPageTab = 'history' | 'payment' | 'account' | 'credits';
 
 const statusCopy: Record<FeedbackStatus, string> = {
   IDLE: '채용공고와 이력서/포트폴리오를 넣고 직무 적합도 분석을 시작해보세요.',
@@ -193,6 +228,12 @@ export function App() {
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('input');
+  const [creditSummary, setCreditSummary] = useState<CreditSummary | null>(null);
+  const [paymentProducts, setPaymentProducts] = useState<PaymentProduct[]>([]);
+  const [paymentDevMode, setPaymentDevMode] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [myPageTab, setMyPageTab] = useState<MyPageTab>('history');
   const pollTimer = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -244,6 +285,11 @@ export function App() {
       const data = (await response.json()) as SubmitResponse & { error?: string };
 
       if (!response.ok) {
+        if (response.status === 402) {
+          setPaymentError(data.error || data.message || '분석권이 부족합니다. 분석권을 충전해 주세요.');
+          setViewMode('mypage');
+          void loadPaymentSummary();
+        }
         throw new Error(data.error || data.message || '분석 요청 접수에 실패했습니다.');
       }
 
@@ -282,14 +328,16 @@ export function App() {
       setQueuePosition(data.queuePosition ?? null);
 
       if (data.status === 'COMPLETED') {
-        setResult(data.result);
-        void loadHistories();
-        stopPolling();
+      setResult(data.result);
+      void loadHistories();
+      void loadPaymentSummary();
+      stopPolling();
       }
 
       if (data.status === 'FAILED') {
         setError('분석 중 오류가 발생했습니다. 입력 내용을 확인한 뒤 다시 시도해 주세요.');
         void loadHistories();
+        void loadPaymentSummary();
         stopPolling();
       }
     } catch (pollError) {
@@ -410,6 +458,7 @@ export function App() {
       const data = (await response.json()) as AuthResponse;
       setUser(data.user);
       await loadHistoriesForCurrentUser();
+      await loadPaymentSummary();
     } finally {
       setAuthLoading(false);
     }
@@ -463,6 +512,7 @@ export function App() {
       setAuthPassword('');
       setViewMode('input');
       await loadHistoriesForCurrentUser();
+      await loadPaymentSummary();
     } catch (authSubmitError) {
       setAuthError(authSubmitError instanceof Error ? authSubmitError.message : '인증 처리에 실패했습니다.');
     }
@@ -476,7 +526,66 @@ export function App() {
     resetQuest();
     setUser(null);
     setHistories([]);
+    setCreditSummary(null);
+    setPaymentProducts([]);
     setViewMode('input');
+  }
+
+  async function loadPaymentSummary() {
+    setPaymentLoading(true);
+    setPaymentError('');
+    try {
+      const response = await fetch('/api/payments/summary', {
+        credentials: 'same-origin'
+      });
+
+      if (!response.ok) {
+        throw new Error('결제 정보를 불러오지 못했습니다.');
+      }
+
+      const data = (await response.json()) as PaymentSummaryResponse;
+      setCreditSummary(data.credit);
+      setPaymentProducts(data.products ?? []);
+      setPaymentDevMode(Boolean(data.devMode));
+    } catch (paymentSummaryError) {
+      setPaymentError(paymentSummaryError instanceof Error ? paymentSummaryError.message : '결제 정보를 불러오지 못했습니다.');
+    } finally {
+      setPaymentLoading(false);
+    }
+  }
+
+  async function purchaseDev(productCode: string) {
+    setPaymentLoading(true);
+    setPaymentError('');
+    try {
+      const orderResponse = await fetch('/api/payments/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ productCode })
+      });
+      const orderData = (await orderResponse.json()) as { order?: PaymentOrder; message?: string };
+      if (!orderResponse.ok || !orderData.order) {
+        throw new Error(orderData.message || '주문 생성에 실패했습니다.');
+      }
+
+      const confirmResponse = await fetch(`/api/payments/orders/${orderData.order.orderId}/dev-confirm`, {
+        method: 'POST',
+        credentials: 'same-origin'
+      });
+      const confirmData = (await confirmResponse.json()) as { credit?: CreditSummary; message?: string };
+      if (!confirmResponse.ok) {
+        throw new Error(confirmData.message || '개발 결제 승인에 실패했습니다.');
+      }
+
+      await loadPaymentSummary();
+    } catch (purchaseError) {
+      setPaymentError(purchaseError instanceof Error ? purchaseError.message : '결제 처리에 실패했습니다.');
+    } finally {
+      setPaymentLoading(false);
+    }
   }
 
   function goHome() {
@@ -522,7 +631,9 @@ export function App() {
                 type="button"
                 onClick={() => {
                   setViewMode('mypage');
+                  setMyPageTab('history');
                   void loadHistories();
+                  void loadPaymentSummary();
                 }}
               >
                 <History size={18} />
@@ -654,46 +765,186 @@ export function App() {
             </button>
           </form>
         ) : viewMode === 'mypage' ? (
-          <section className="history-card panel-card">
-            <div className="page-title-row">
-              <div className="card-title-row">
-                <History size={24} />
-                <div>
-                  <p className="eyebrow">My Page</p>
-                  <h2>분석 히스토리</h2>
-                </div>
-              </div>
-              <button className="history-item__button" type="button" onClick={() => setViewMode('input')}>
-                새 분석
+          <section className="mypage-shell panel-card">
+            <aside className="mypage-nav" aria-label="마이페이지 메뉴">
+              <button
+                className={myPageTab === 'history' ? 'mypage-nav__item is-active' : 'mypage-nav__item'}
+                type="button"
+                onClick={() => setMyPageTab('history')}
+              >
+                <History size={18} />
+                <span>분석 히스토리</span>
               </button>
-            </div>
+              <button
+                className={myPageTab === 'payment' ? 'mypage-nav__item is-active' : 'mypage-nav__item'}
+                type="button"
+                onClick={() => setMyPageTab('payment')}
+              >
+                <CreditCard size={18} />
+                <span>결제</span>
+              </button>
+              <button
+                className={myPageTab === 'account' ? 'mypage-nav__item is-active' : 'mypage-nav__item'}
+                type="button"
+                onClick={() => setMyPageTab('account')}
+              >
+                <Settings size={18} />
+                <span>회원 관리</span>
+              </button>
+              <button
+                className={myPageTab === 'credits' ? 'mypage-nav__item is-active' : 'mypage-nav__item'}
+                type="button"
+                onClick={() => setMyPageTab('credits')}
+              >
+                <Wallet size={18} />
+                <span>분석권 관리</span>
+              </button>
+            </aside>
 
-            {historyLoading && <p className="history-empty">히스토리를 불러오는 중입니다.</p>}
-
-            {!historyLoading && histories.length === 0 && (
-              <p className="history-empty">아직 저장된 분석이 없습니다.</p>
-            )}
-
-            {!historyLoading && histories.length > 0 && (
-              <div className="history-list">
-                {histories.map((item) => (
-                  <article className="history-item" key={item.id}>
-                    <div>
-                      <p className="history-item__title">{buildHistoryTitle(item)}</p>
-                      <p className="history-item__meta">{buildHistoryMeta(item)}</p>
+            <div className="mypage-content">
+              {myPageTab === 'history' && (
+                <section>
+                  <div className="page-title-row">
+                    <div className="card-title-row">
+                      <History size={24} />
+                      <div>
+                        <p className="eyebrow">My Page</p>
+                        <h2>분석 히스토리</h2>
+                      </div>
                     </div>
-                    <button
-                      className="history-item__button"
-                      type="button"
-                      onClick={() => void openHistory(item)}
-                      disabled={!item.hasResult && item.status === 'FAILED'}
-                    >
-                      {item.status === 'COMPLETED' ? '리포트 보기' : statusCopy[item.status]}
+                    <button className="history-item__button" type="button" onClick={() => setViewMode('input')}>
+                      새 분석
                     </button>
-                  </article>
-                ))}
-              </div>
-            )}
+                  </div>
+
+                  {historyLoading && <p className="history-empty">히스토리를 불러오는 중입니다.</p>}
+
+                  {!historyLoading && histories.length === 0 && (
+                    <p className="history-empty">아직 저장된 분석이 없습니다.</p>
+                  )}
+
+                  {!historyLoading && histories.length > 0 && (
+                    <div className="history-list">
+                      {histories.map((item) => (
+                        <article className="history-item" key={item.id}>
+                          <div>
+                            <p className="history-item__title">{buildHistoryTitle(item)}</p>
+                            <p className="history-item__meta">{buildHistoryMeta(item)}</p>
+                          </div>
+                          <button
+                            className="history-item__button"
+                            type="button"
+                            onClick={() => void openHistory(item)}
+                            disabled={!item.hasResult && item.status === 'FAILED'}
+                          >
+                            {item.status === 'COMPLETED' ? '리포트 보기' : statusCopy[item.status]}
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {myPageTab === 'payment' && (
+                <section className="billing-panel billing-panel--flat">
+                  <div className="card-title-row">
+                    <CreditCard size={24} />
+                    <div>
+                      <p className="eyebrow">Payment</p>
+                      <h2>분석권 결제</h2>
+                    </div>
+                  </div>
+
+                  {paymentError && (
+                    <div className="feedback-alert feedback-alert--error">
+                      <XCircle size={20} />
+                      <span>{paymentError}</span>
+                    </div>
+                  )}
+
+                  <div className="product-grid">
+                    {paymentProducts.map((product) => (
+                      <article className="product-card" key={product.code}>
+                        <div>
+                          <strong>{product.name}</strong>
+                          <span>{product.credits}회 충전</span>
+                        </div>
+                        <p>{product.amount.toLocaleString('ko-KR')}원</p>
+                        <button
+                          className="history-item__button"
+                          type="button"
+                          disabled={paymentLoading || !paymentDevMode}
+                          onClick={() => void purchaseDev(product.code)}
+                        >
+                          <CreditCard size={16} />
+                          <span>{paymentDevMode ? '개발 결제 완료' : '결제 준비 중'}</span>
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {myPageTab === 'account' && (
+                <section className="account-panel">
+                  <div className="card-title-row">
+                    <Settings size={24} />
+                    <div>
+                      <p className="eyebrow">Account</p>
+                      <h2>회원 관리</h2>
+                    </div>
+                  </div>
+                  <div className="account-detail">
+                    <div>
+                      <span>이름</span>
+                      <strong>{user?.name}</strong>
+                    </div>
+                    <div>
+                      <span>이메일</span>
+                      <strong>{user?.email}</strong>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {myPageTab === 'credits' && (
+                <section className="credits-panel">
+                  <div className="card-title-row">
+                    <Wallet size={24} />
+                    <div>
+                      <p className="eyebrow">Credits</p>
+                      <h2>분석권 관리</h2>
+                    </div>
+                  </div>
+
+                  <div className="credit-hero">
+                    <span>잔여 분석권</span>
+                    <strong>{creditSummary?.balance ?? 0}회</strong>
+                  </div>
+
+                  <div className="credit-metrics">
+                    <div>
+                      <span>무료 지급</span>
+                      <strong>{creditSummary?.totalGranted ?? 0}회</strong>
+                    </div>
+                    <div>
+                      <span>구매</span>
+                      <strong>{creditSummary?.totalPurchased ?? 0}회</strong>
+                    </div>
+                    <div>
+                      <span>사용</span>
+                      <strong>{creditSummary?.totalUsed ?? 0}회</strong>
+                    </div>
+                  </div>
+
+                  <button className="primary-button" type="button" onClick={() => setMyPageTab('payment')}>
+                    <CreditCard size={22} />
+                    <span>분석권 충전하기</span>
+                  </button>
+                </section>
+              )}
+            </div>
           </section>
         ) : viewMode === 'input' ? (
           <div className="idle-stack">

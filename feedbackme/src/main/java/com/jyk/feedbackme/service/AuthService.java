@@ -29,12 +29,14 @@ public class AuthService {
 
     private final AppUserRepository appUserRepository;
     private final AuthSessionRepository authSessionRepository;
+    private final CreditService creditService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public AuthService(AppUserRepository appUserRepository, AuthSessionRepository authSessionRepository) {
+    public AuthService(AppUserRepository appUserRepository, AuthSessionRepository authSessionRepository, CreditService creditService) {
         this.appUserRepository = appUserRepository;
         this.authSessionRepository = authSessionRepository;
+        this.creditService = creditService;
     }
 
     @Transactional
@@ -55,6 +57,7 @@ public class AuthService {
                 .build();
 
         appUserRepository.save(user);
+        creditService.grantSignupCredits(user);
         return createSession(user);
     }
 
@@ -68,6 +71,7 @@ public class AuthService {
             throw new IllegalArgumentException("이메일 또는 비밀번호를 확인해 주세요.");
         }
 
+        creditService.grantSignupCreditsIfMissing(user);
         return createSession(user);
     }
 

@@ -126,7 +126,8 @@ textarea:focus-visible,
 }
 
 h1,
-h2 {
+h2,
+h3 {
   margin: 0;
   color: var(--ink);
   letter-spacing: 0;
@@ -142,6 +143,11 @@ h2 {
   font-size: clamp(20px, 3vw, 26px);
   font-weight: 900;
   line-height: 1.2;
+}
+
+h3 {
+  font-size: 22px;
+  font-weight: 900;
 }
 
 .progress-card,
@@ -567,8 +573,49 @@ section.auth-card {
   margin-top: 0;
 }
 
-.history-card {
+.history-card,
+.mypage-shell {
   color: var(--ink);
+}
+
+.mypage-shell {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 18px;
+  min-height: 520px;
+}
+
+.mypage-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 14px;
+  border-right: 2px solid var(--border);
+}
+
+.mypage-nav__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--ink-muted);
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.mypage-nav__item.is-active {
+  color: var(--secondary);
+  border-color: var(--secondary);
+  background: rgba(28, 176, 246, 0.08);
+}
+
+.mypage-content {
+  min-width: 0;
 }
 
 .page-title-row {
@@ -630,6 +677,10 @@ section.auth-card {
 }
 
 .history-item__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-height: 40px;
   padding: 0 12px;
   color: var(--secondary);
@@ -640,6 +691,138 @@ section.auth-card {
   font-weight: 900;
   cursor: pointer;
   white-space: nowrap;
+}
+
+.billing-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.billing-panel--flat {
+  margin-top: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.billing-summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.billing-summary__icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  color: var(--canvas);
+  border-radius: var(--radius-md);
+  background: var(--secondary);
+}
+
+.billing-summary p:last-child {
+  margin: 4px 0 0;
+  color: var(--ink-muted);
+  font-size: 14px;
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.product-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--canvas);
+}
+
+.product-card strong,
+.product-card span {
+  display: block;
+}
+
+.product-card strong {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.product-card span {
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.product-card p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.account-panel,
+.credits-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.account-detail,
+.credit-metrics {
+  display: grid;
+  gap: 10px;
+}
+
+.account-detail div,
+.credit-metrics div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.account-detail span,
+.credit-metrics span {
+  color: var(--ink-muted);
+}
+
+.account-detail strong,
+.credit-metrics strong {
+  color: var(--ink);
+}
+
+.credit-hero {
+  display: grid;
+  gap: 4px;
+  padding: 22px;
+  color: var(--canvas);
+  border-radius: var(--radius-lg);
+  background: var(--secondary);
+}
+
+.credit-hero span {
+  font-size: 14px;
+  font-weight: 900;
+  opacity: 0.9;
+}
+
+.credit-hero strong {
+  font-size: 42px;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .history-item__button:disabled {
@@ -692,6 +875,23 @@ section.auth-card {
   }
 
   .history-item {
+    grid-template-columns: 1fr;
+  }
+
+  .mypage-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .mypage-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-right: 0;
+    padding-bottom: 12px;
+    border-right: 0;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .product-grid {
     grid-template-columns: 1fr;
   }
 

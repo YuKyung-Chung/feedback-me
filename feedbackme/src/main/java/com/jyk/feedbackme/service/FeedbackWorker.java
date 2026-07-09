@@ -24,15 +24,18 @@ public class FeedbackWorker {
     private final FeedbackHistoryRepository feedbackHistoryRepository;
     private final GeminiService geminiService;
     private final TransactionTemplate transactionTemplate;
+    private final CreditService creditService;
 
     public FeedbackWorker(RedisTemplate<String, String> redisTemplate,
                           FeedbackHistoryRepository feedbackHistoryRepository,
                           GeminiService geminiService,
-                          TransactionTemplate transactionTemplate) {
+                          TransactionTemplate transactionTemplate,
+                          CreditService creditService) {
         this.redisTemplate = redisTemplate;
         this.feedbackHistoryRepository = feedbackHistoryRepository;
         this.geminiService = geminiService;
         this.transactionTemplate = transactionTemplate;
+        this.creditService = creditService;
     }
 
     @Scheduled(fixedDelayString = "${feedback.queue.poll-delay-ms:1000}")
@@ -100,6 +103,9 @@ public class FeedbackWorker {
                 .ifPresent(history -> {
                     history.failFeedback();
                     feedbackHistoryRepository.save(history);
+                    if (history.getUser() != null) {
+                        creditService.refundForFailedAnalysis(history.getUser(), historyId);
+                    }
                 }));
     }
 }

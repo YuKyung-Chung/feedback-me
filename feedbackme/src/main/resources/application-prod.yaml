@@ -15,6 +15,11 @@ spring:
 gemini:
   api-key: ${GEMINI_API_KEY}
 
+payments:
+  toss:
+    secret-key: ${TOSS_SECRET_KEY:}
+  dev-mode: ${PAYMENT_DEV_MODE:false}
+
 feedback:
   queue:
     poll-delay-ms: ${FEEDBACK_QUEUE_POLL_DELAY_MS:1000}

@@ -36,11 +36,13 @@ public class GeminiService {
 
     private final FeedbackHistoryRepository feedbackHistoryRepository;
     private final RedisTemplate<String, String> redisTemplate;
+    private final CreditService creditService;
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
-    public GeminiService(FeedbackHistoryRepository feedbackHistoryRepository, RedisTemplate<String, String> redisTemplate) {
+    public GeminiService(FeedbackHistoryRepository feedbackHistoryRepository, RedisTemplate<String, String> redisTemplate, CreditService creditService) {
         this.feedbackHistoryRepository = feedbackHistoryRepository;
         this.redisTemplate = redisTemplate;
+        this.creditService = creditService;
     }
 
     @Transactional
@@ -64,10 +66,12 @@ public class GeminiService {
         if (cachedResult != null) {
             history.completeFeedback(cachedResult);
             feedbackHistoryRepository.save(history);
+            creditService.useForAnalysis(user, history.getId());
             return history.getId();
         }
 
         feedbackHistoryRepository.save(history);
+        creditService.useForAnalysis(user, history.getId());
         redisTemplate.opsForList().rightPush(QUEUE_KEY, history.getId().toString());
         return history.getId();
     }
