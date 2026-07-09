@@ -1,5 +1,6 @@
 package com.jyk.feedbackme.service;
 
+import com.jyk.feedbackme.domain.AppUser;
 import com.jyk.feedbackme.domain.FeedbackHistory;
 import com.jyk.feedbackme.domain.FeedbackStatus;
 import com.jyk.feedbackme.repository.FeedbackHistoryRepository;
@@ -25,6 +26,7 @@ public class GeminiService {
 
     private static final String QUEUE_KEY = "feedback:queue";
     private static final String CACHE_PREFIX = "feedback:result:";
+    private static final int MAX_GEMINI_ATTEMPTS = 3;
 
     @Value("${gemini.api-key}")
     private String apiKey;
@@ -42,12 +44,17 @@ public class GeminiService {
     }
 
     @Transactional
-    public Long enqueueFeedbackRequest(String jobDescription, String attachmentText, List<String> base64Images) {
+    public Long enqueueFeedbackRequest(AppUser user, String jobUrl, String companyName, String jobTitle, String attachmentName, String jobDescription, String attachmentText, List<String> base64Images) {
         String imagesCsv = toCsv(base64Images);
         String cacheKey = createCacheKey(jobDescription, attachmentText, imagesCsv);
         String cachedResult = redisTemplate.opsForValue().get(cacheKey);
 
         FeedbackHistory history = FeedbackHistory.builder()
+                .user(user)
+                .jobUrl(jobUrl)
+                .companyName(companyName)
+                .jobTitle(jobTitle)
+                .attachmentName(attachmentName)
                 .jobDescription(jobDescription)
                 .attachmentText(attachmentText)
                 .base64Images(imagesCsv)
@@ -269,7 +276,16 @@ public class GeminiService {
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
 
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response = null;
+        for (int attempt = 1; attempt <= MAX_GEMINI_ATTEMPTS; attempt++) {
+            response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (!isRetryableGeminiError(response.statusCode()) || attempt == MAX_GEMINI_ATTEMPTS) {
+                break;
+            }
+
+            Thread.sleep(Duration.ofSeconds(attempt * 2).toMillis());
+        }
+
         String responseBody = response.body();
 
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
@@ -284,6 +300,10 @@ public class GeminiService {
                 .getJSONArray("parts")
                 .getJSONObject(0)
                 .getString("text");
+    }
+
+    private boolean isRetryableGeminiError(int statusCode) {
+        return statusCode == 429 || statusCode == 503 || statusCode >= 500;
     }
 
     private String createCacheKey(FeedbackHistory history) {

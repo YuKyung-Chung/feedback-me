@@ -3,10 +3,14 @@ import {
   CheckCircle2,
   Download,
   FileText,
+  History,
+  LogIn,
+  LogOut,
   LoaderCircle,
   Send,
   Sparkles,
   Upload,
+  UserPlus,
   XCircle
 } from 'lucide-react';
 
@@ -23,6 +27,35 @@ type StatusResponse = {
   queuePosition?: number;
   updatedAt?: string;
 };
+
+type HistoryItem = {
+  id: number;
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  jobUrl: string;
+  companyName: string;
+  jobTitle: string;
+  attachmentName: string;
+  hasResult: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type HistoryResponse = {
+  histories: HistoryItem[];
+};
+
+type AuthUser = {
+  id: number;
+  email: string;
+  name: string;
+};
+
+type AuthResponse = {
+  user: AuthUser;
+  message?: string;
+};
+
+type ViewMode = 'input' | 'auth' | 'mypage' | 'result';
 
 const statusCopy: Record<FeedbackStatus, string> = {
   IDLE: '채용공고와 이력서/포트폴리오를 넣고 직무 적합도 분석을 시작해보세요.',
@@ -117,6 +150,31 @@ function MarkdownReport({ content }: { content: string }) {
   return <div className="report-markdown">{elements}</div>;
 }
 
+function formatDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
+}
+
+function buildHistoryTitle(item: HistoryItem): string {
+  const company = item.companyName || '회사명 미확인';
+  const attachment = item.attachmentName || '첨부 파일명 없음';
+  return `${company} · ${attachment}`;
+}
+
+function buildHistoryMeta(item: HistoryItem): string {
+  const title = item.jobTitle || item.jobUrl || '저장된 분석';
+  return `${title} · ${formatDate(item.createdAt)}`;
+}
+
 export function App() {
   const [url, setUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -125,10 +183,22 @@ export function App() {
   const [error, setError] = useState('');
   const [historyId, setHistoryId] = useState<number | null>(null);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
+  const [histories, setHistories] = useState<HistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authName, setAuthName] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>('input');
   const pollTimer = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    void loadCurrentUser();
+
     return () => {
       if (pollTimer.current) {
         window.clearInterval(pollTimer.current);
@@ -138,6 +208,13 @@ export function App() {
 
   async function submitFeedback(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (!user) {
+      setAuthMode('login');
+      setAuthError('분석을 시작하려면 로그인이 필요합니다.');
+      setViewMode('auth');
+      return;
+    }
 
     if (!url.trim()) {
       setError('채용공고 URL을 입력해 주세요.');
@@ -161,7 +238,8 @@ export function App() {
     try {
       const response = await fetch('/api/feedback', {
         method: 'POST',
-        body: formData
+        body: formData,
+        credentials: 'same-origin'
       });
       const data = (await response.json()) as SubmitResponse & { error?: string };
 
@@ -171,6 +249,7 @@ export function App() {
 
       setHistoryId(data.historyId);
       setStatus('PENDING');
+      setViewMode('result');
       startPolling(data.historyId);
     } catch (submitError) {
       setStatus('FAILED');
@@ -191,7 +270,9 @@ export function App() {
 
   async function fetchFeedbackStatus(id: number) {
     try {
-      const response = await fetch(`/api/feedback/status/${id}`);
+        const response = await fetch(`/api/feedback/status/${id}`, {
+          credentials: 'same-origin'
+        });
       if (!response.ok) {
         throw new Error('분석 상태 확인에 실패했습니다.');
       }
@@ -202,11 +283,13 @@ export function App() {
 
       if (data.status === 'COMPLETED') {
         setResult(data.result);
+        void loadHistories();
         stopPolling();
       }
 
       if (data.status === 'FAILED') {
         setError('분석 중 오류가 발생했습니다. 입력 내용을 확인한 뒤 다시 시도해 주세요.');
+        void loadHistories();
         stopPolling();
       }
     } catch (pollError) {
@@ -230,6 +313,7 @@ export function App() {
     setError('');
     setHistoryId(null);
     setQueuePosition(null);
+    setViewMode('input');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -237,6 +321,60 @@ export function App() {
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     setFile(event.target.files?.[0] ?? null);
+  }
+
+  async function loadHistories() {
+    if (!user) {
+      setHistories([]);
+      return;
+    }
+
+    setHistoryLoading(true);
+    try {
+      const response = await fetch('/api/feedback/history', {
+        credentials: 'same-origin'
+      });
+      if (!response.ok) {
+        throw new Error('히스토리 조회에 실패했습니다.');
+      }
+
+      const data = (await response.json()) as HistoryResponse;
+      setHistories(data.histories ?? []);
+    } catch {
+      setHistories([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function openHistory(item: HistoryItem) {
+    stopPolling();
+    setError('');
+    setResult('');
+    setQueuePosition(null);
+    setHistoryId(item.id);
+    setViewMode('result');
+
+    try {
+      const response = await fetch(`/api/feedback/status/${item.id}`, {
+        credentials: 'same-origin'
+      });
+      if (!response.ok) {
+        throw new Error('저장된 분석을 불러오지 못했습니다.');
+      }
+
+      const data = (await response.json()) as StatusResponse;
+      setStatus(data.status);
+      setQueuePosition(data.queuePosition ?? null);
+      setResult(data.result ?? '');
+
+      if (data.status === 'PENDING' || data.status === 'PROCESSING') {
+        startPolling(item.id);
+      }
+    } catch (historyError) {
+      setStatus('FAILED');
+      setError(historyError instanceof Error ? historyError.message : '저장된 분석을 불러오지 못했습니다.');
+    }
   }
 
   function downloadReport() {
@@ -256,6 +394,97 @@ export function App() {
     URL.revokeObjectURL(url);
   }
 
+  async function loadCurrentUser() {
+    setAuthLoading(true);
+    try {
+      const response = await fetch('/api/auth/me', {
+        credentials: 'same-origin'
+      });
+
+      if (!response.ok) {
+        setUser(null);
+        setHistories([]);
+        return;
+      }
+
+      const data = (await response.json()) as AuthResponse;
+      setUser(data.user);
+      await loadHistoriesForCurrentUser();
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function loadHistoriesForCurrentUser() {
+    setHistoryLoading(true);
+    try {
+      const response = await fetch('/api/feedback/history', {
+        credentials: 'same-origin'
+      });
+      if (!response.ok) {
+        throw new Error('히스토리 조회에 실패했습니다.');
+      }
+
+      const data = (await response.json()) as HistoryResponse;
+      setHistories(data.histories ?? []);
+    } catch {
+      setHistories([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function submitAuth(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthError('');
+
+    try {
+      const response = await fetch(`/api/auth/${authMode === 'login' ? 'login' : 'register'}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          email: authEmail,
+          password: authPassword,
+          name: authName
+        })
+      });
+      const data = (await response.json()) as AuthResponse;
+
+      if (!response.ok) {
+        throw new Error(data.message || '인증 처리에 실패했습니다.');
+      }
+
+      setUser(data.user);
+      setAuthName('');
+      setAuthEmail('');
+      setAuthPassword('');
+      setViewMode('input');
+      await loadHistoriesForCurrentUser();
+    } catch (authSubmitError) {
+      setAuthError(authSubmitError instanceof Error ? authSubmitError.message : '인증 처리에 실패했습니다.');
+    }
+  }
+
+  async function logout() {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'same-origin'
+    });
+    resetQuest();
+    setUser(null);
+    setHistories([]);
+    setViewMode('input');
+  }
+
+  function goHome() {
+    resetQuest();
+    setAuthError('');
+    setViewMode('input');
+  }
+
   const isWorking = status === 'SUBMITTING' || status === 'PENDING' || status === 'PROCESSING';
   const isComplete = status === 'COMPLETED';
   const isFailed = status === 'FAILED';
@@ -272,16 +501,70 @@ export function App() {
   return (
     <main className="app-shell">
       <header className="topbar" aria-label="FeedbackMe 상태">
-        <div className="brand-mark" aria-hidden="true">
-          <Sparkles size={28} />
-        </div>
-        <div>
-          <p className="eyebrow">FeedbackMe</p>
-          <h1>직무 적합도 분석 Agent</h1>
-        </div>
+        <button className="brand-home" type="button" onClick={goHome} aria-label="홈으로 이동">
+          <span className="brand-mark" aria-hidden="true">
+            <Sparkles size={28} />
+          </span>
+          <span>
+            <strong>Feedback Me</strong>
+            <small>AI 직무 적합도 분석</small>
+          </span>
+        </button>
+        <nav className="account-nav" aria-label="계정 메뉴">
+          {user ? (
+            <div className="auth-summary">
+              <div>
+                <strong>{user.name}</strong>
+                <span>{user.email}</span>
+              </div>
+              <button
+                className="icon-text-button"
+                type="button"
+                onClick={() => {
+                  setViewMode('mypage');
+                  void loadHistories();
+                }}
+              >
+                <History size={18} />
+                <span>마이페이지</span>
+              </button>
+              <button className="icon-text-button" type="button" onClick={() => void logout()}>
+                <LogOut size={18} />
+                <span>로그아웃</span>
+              </button>
+            </div>
+          ) : (
+            <div className="account-actions">
+              <button
+                className="icon-text-button"
+                type="button"
+                onClick={() => {
+                  setAuthMode('login');
+                  setAuthError('');
+                  setViewMode('auth');
+                }}
+              >
+                <LogIn size={18} />
+                <span>로그인</span>
+              </button>
+              <button
+                className="icon-text-button"
+                type="button"
+                onClick={() => {
+                  setAuthMode('register');
+                  setAuthError('');
+                  setViewMode('auth');
+                }}
+              >
+                <UserPlus size={18} />
+                <span>회원가입</span>
+              </button>
+            </div>
+          )}
+        </nav>
       </header>
 
-      {hasStarted && (
+      {viewMode === 'result' && hasStarted && (
         <section className="progress-card" aria-live="polite">
           <div className="progress-card__header">
             <div>
@@ -297,51 +580,168 @@ export function App() {
       )}
 
       <section className="workspace workspace--single">
-        {!hasStarted ? (
-          <form className="quest-card panel-card" onSubmit={submitFeedback}>
+        {authLoading ? (
+          <section className="auth-card panel-card">
+            <LoaderCircle className="spin" size={32} />
+            <p>로그인 상태를 확인하는 중입니다.</p>
+          </section>
+        ) : viewMode === 'auth' ? (
+          <form className="auth-card panel-card" onSubmit={submitAuth}>
             <div className="card-title-row">
-              <FileText size={24} />
+              {authMode === 'login' ? <LogIn size={24} /> : <UserPlus size={24} />}
               <div>
-                <p className="eyebrow">Input</p>
-                <h2>분석할 공고와 지원자 자료를 입력하세요</h2>
+                <p className="eyebrow">Account</p>
+                <h2>{authMode === 'login' ? '로그인' : '회원가입'}</h2>
               </div>
             </div>
 
+            {authMode === 'register' && (
+              <label className="field">
+                <span>이름</span>
+                <input
+                  type="text"
+                  value={authName}
+                  onChange={(event) => setAuthName(event.target.value)}
+                  placeholder="정유경"
+                />
+              </label>
+            )}
+
             <label className="field">
-              <span>채용공고 URL</span>
+              <span>이메일</span>
               <input
-                type="url"
-                value={url}
-                onChange={(event) => setUrl(event.target.value)}
-                placeholder="https://www.saramin.co.kr/..."
-                disabled={isWorking}
+                type="email"
+                value={authEmail}
+                onChange={(event) => setAuthEmail(event.target.value)}
+                placeholder="you@example.com"
+                required
               />
             </label>
 
-            <label className="upload-box">
-              <Upload size={22} />
-              <span>{file ? file.name : '이력서 또는 포트폴리오 PDF/DOCX 첨부하기'}</span>
+            <label className="field">
+              <span>비밀번호</span>
               <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.docx"
-                onChange={handleFileChange}
-                disabled={isWorking}
+                type="password"
+                value={authPassword}
+                onChange={(event) => setAuthPassword(event.target.value)}
+                placeholder="8자 이상"
+                minLength={8}
+                required
               />
             </label>
 
-            {error && (
+            {authError && (
               <div className="feedback-alert feedback-alert--error">
                 <XCircle size={20} />
-                <span>{error}</span>
+                <span>{authError}</span>
               </div>
             )}
 
-            <button className="primary-button" type="submit" disabled={isWorking}>
-              <Send size={22} />
-              <span>직무 적합도 분석하기</span>
+            <button className="primary-button" type="submit">
+              {authMode === 'login' ? <LogIn size={22} /> : <UserPlus size={22} />}
+              <span>{authMode === 'login' ? '로그인하기' : '가입하고 시작하기'}</span>
+            </button>
+
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => {
+                setAuthError('');
+                setAuthMode(authMode === 'login' ? 'register' : 'login');
+              }}
+            >
+              {authMode === 'login' ? '계정이 없나요? 회원가입' : '이미 계정이 있나요? 로그인'}
             </button>
           </form>
+        ) : viewMode === 'mypage' ? (
+          <section className="history-card panel-card">
+            <div className="page-title-row">
+              <div className="card-title-row">
+                <History size={24} />
+                <div>
+                  <p className="eyebrow">My Page</p>
+                  <h2>분석 히스토리</h2>
+                </div>
+              </div>
+              <button className="history-item__button" type="button" onClick={() => setViewMode('input')}>
+                새 분석
+              </button>
+            </div>
+
+            {historyLoading && <p className="history-empty">히스토리를 불러오는 중입니다.</p>}
+
+            {!historyLoading && histories.length === 0 && (
+              <p className="history-empty">아직 저장된 분석이 없습니다.</p>
+            )}
+
+            {!historyLoading && histories.length > 0 && (
+              <div className="history-list">
+                {histories.map((item) => (
+                  <article className="history-item" key={item.id}>
+                    <div>
+                      <p className="history-item__title">{buildHistoryTitle(item)}</p>
+                      <p className="history-item__meta">{buildHistoryMeta(item)}</p>
+                    </div>
+                    <button
+                      className="history-item__button"
+                      type="button"
+                      onClick={() => void openHistory(item)}
+                      disabled={!item.hasResult && item.status === 'FAILED'}
+                    >
+                      {item.status === 'COMPLETED' ? '리포트 보기' : statusCopy[item.status]}
+                    </button>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : viewMode === 'input' ? (
+          <div className="idle-stack">
+            <form className="quest-card panel-card" onSubmit={submitFeedback}>
+              <div className="card-title-row">
+                <FileText size={24} />
+                <div>
+                  <p className="eyebrow">Input</p>
+                  <h2>분석할 공고와 지원자 자료를 입력하세요</h2>
+                </div>
+              </div>
+
+              <label className="field">
+                <span>채용공고 URL</span>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(event) => setUrl(event.target.value)}
+                  placeholder="https://www.saramin.co.kr/..."
+                  disabled={isWorking}
+                />
+              </label>
+
+              <label className="upload-box">
+                <Upload size={22} />
+                <span>{file ? file.name : '이력서 또는 포트폴리오 PDF/DOCX 첨부하기'}</span>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.docx"
+                  onChange={handleFileChange}
+                  disabled={isWorking}
+                />
+              </label>
+
+              {error && (
+                <div className="feedback-alert feedback-alert--error">
+                  <XCircle size={20} />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <button className="primary-button" type="submit" disabled={isWorking}>
+                <Send size={22} />
+                <span>직무 적합도 분석하기</span>
+              </button>
+            </form>
+          </div>
         ) : (
           <aside className="result-card panel-card result-card--expanded">
             <div className="card-title-row">

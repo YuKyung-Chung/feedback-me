@@ -4,9 +4,12 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -24,6 +27,18 @@ public class FeedbackHistory {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private AppUser user;
+
+    private String jobUrl;
+
+    private String companyName;
+
+    private String jobTitle;
+
+    private String attachmentName;
 
     @Column(columnDefinition = "TEXT")
     private String jobDescription;
@@ -44,7 +59,12 @@ public class FeedbackHistory {
     private LocalDateTime updatedAt;
 
     @Builder
-    public FeedbackHistory(String jobDescription, String attachmentText, String base64Images, FeedbackStatus status) {
+    public FeedbackHistory(AppUser user, String jobUrl, String companyName, String jobTitle, String attachmentName, String jobDescription, String attachmentText, String base64Images, FeedbackStatus status) {
+        this.user = user;
+        this.jobUrl = jobUrl;
+        this.companyName = companyName;
+        this.jobTitle = jobTitle;
+        this.attachmentName = attachmentName;
         this.jobDescription = jobDescription;
         this.attachmentText = attachmentText;
         this.base64Images = base64Images;

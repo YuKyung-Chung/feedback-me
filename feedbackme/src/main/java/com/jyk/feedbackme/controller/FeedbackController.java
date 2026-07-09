@@ -1,10 +1,16 @@
 package com.jyk.feedbackme.controller;
 
+import com.jyk.feedbackme.domain.AppUser;
 import com.jyk.feedbackme.domain.FeedbackHistory;
+import com.jyk.feedbackme.domain.FeedbackStatus;
+import com.jyk.feedbackme.dto.CrawledJobPosting;
 import com.jyk.feedbackme.repository.FeedbackHistoryRepository;
 import com.jyk.feedbackme.service.CrawlingService;
 import com.jyk.feedbackme.service.FileExtractService;
 import com.jyk.feedbackme.service.GeminiService;
+import com.jyk.feedbackme.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,22 +33,33 @@ public class FeedbackController {
     private final CrawlingService crawlingService;
     private final FileExtractService fileExtractService;
     private final FeedbackHistoryRepository feedbackHistoryRepository;
+    private final AuthService authService;
 
     public FeedbackController(GeminiService geminiService,
                               CrawlingService crawlingService,
                               FileExtractService fileExtractService,
-                              FeedbackHistoryRepository feedbackHistoryRepository) {
+                              FeedbackHistoryRepository feedbackHistoryRepository,
+                              AuthService authService) {
         this.geminiService = geminiService;
         this.crawlingService = crawlingService;
         this.fileExtractService = fileExtractService;
         this.feedbackHistoryRepository = feedbackHistoryRepository;
+        this.authService = authService;
     }
 
     @PostMapping(value = "/feedback", consumes = "multipart/form-data")
     public ResponseEntity<?> createFeedback(
+            HttpServletRequest request,
             @RequestParam("url") String url,
             @RequestParam(value = "file", required = false) MultipartFile file) {
         try {
+            AppUser user = authService.getCurrentUser(request).orElse(null);
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                        "message", "로그인이 필요합니다."
+                ));
+            }
+
             if (url == null || url.isBlank()) {
                 return ResponseEntity.badRequest().body(Map.of(
                         "message", "Job posting URL is required."
@@ -55,8 +72,9 @@ public class FeedbackController {
                 ));
             }
 
-            String jobDescription = null;
-            jobDescription = crawlingService.crawl(url);
+            String trimmedUrl = url.trim();
+            CrawledJobPosting posting = crawlingService.crawlPosting(trimmedUrl);
+            String jobDescription = posting.content();
 
             String attachmentText = null;
             List<String> base64Images = null;
@@ -68,7 +86,16 @@ public class FeedbackController {
                 attachmentText = fileExtractService.extract(file);
             }
 
-            Long historyId = geminiService.enqueueFeedbackRequest(jobDescription, attachmentText, base64Images);
+            Long historyId = geminiService.enqueueFeedbackRequest(
+                    user,
+                    trimmedUrl,
+                    posting.companyName(),
+                    posting.title(),
+                    filename,
+                    jobDescription,
+                    attachmentText,
+                    base64Images
+            );
 
             return ResponseEntity.accepted().body(Map.of(
                     "message", "Feedback request accepted.",
@@ -83,8 +110,15 @@ public class FeedbackController {
     }
 
     @GetMapping("/feedback/status/{id}")
-    public ResponseEntity<?> checkStatus(@PathVariable Long id) {
-        FeedbackHistory history = feedbackHistoryRepository.findById(id).orElse(null);
+    public ResponseEntity<?> checkStatus(HttpServletRequest request, @PathVariable Long id) {
+        AppUser user = authService.getCurrentUser(request).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "message", "로그인이 필요합니다."
+            ));
+        }
+
+        FeedbackHistory history = feedbackHistoryRepository.findByIdAndUser(id, user).orElse(null);
         if (history == null) {
             return ResponseEntity.notFound().build();
         }
@@ -100,5 +134,34 @@ public class FeedbackController {
         }
 
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/feedback/history")
+    public ResponseEntity<?> getHistory(HttpServletRequest request) {
+        AppUser user = authService.getCurrentUser(request).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "message", "로그인이 필요합니다."
+            ));
+        }
+
+        List<Map<String, Object>> histories = feedbackHistoryRepository.findTop20ByUserAndStatusOrderByCreatedAtDesc(user, FeedbackStatus.COMPLETED)
+                .stream()
+                .map(history -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("id", history.getId());
+                    item.put("status", history.getStatus().name());
+                    item.put("jobUrl", history.getJobUrl() != null ? history.getJobUrl() : "");
+                    item.put("companyName", history.getCompanyName() != null ? history.getCompanyName() : "");
+                    item.put("jobTitle", history.getJobTitle() != null ? history.getJobTitle() : "");
+                    item.put("attachmentName", history.getAttachmentName() != null ? history.getAttachmentName() : "");
+                    item.put("hasResult", history.getFeedbackResult() != null && !history.getFeedbackResult().isBlank());
+                    item.put("createdAt", history.getCreatedAt().toString());
+                    item.put("updatedAt", history.getUpdatedAt().toString());
+                    return item;
+                })
+                .toList();
+
+        return ResponseEntity.ok(Map.of("histories", histories));
     }
 }
