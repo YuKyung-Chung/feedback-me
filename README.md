@@ -194,7 +194,13 @@ cp .env.example .env
 
 ```env
 MYSQL_ROOT_PASSWORD=change-me-root-password
+MYSQL_HOST=change-me-mysql-host
+MYSQL_PORT=change-me-mysql-port
+MYSQL_DATABASE=change-me-database-name
+MYSQL_USER=change-me-database-user
 MYSQL_PASSWORD=change-me-user-password
+REDIS_HOST=change-me-redis-host
+REDIS_PORT=change-me-redis-port
 GEMINI_API_KEY=change-me-gemini-api-key
 TOSS_SECRET_KEY=change-me-toss-secret-key
 PAYMENT_DEV_MODE=true
@@ -202,12 +208,7 @@ GRAFANA_ADMIN_PASSWORD=change-me-grafana-password
 APP_VERSION=latest
 ```
 
-로컬 개발 시 기본 DB 계정은 `docker-compose.yml` 기준으로 다음과 같습니다.
-
-- database: `feedbackme`
-- username: `user`
-- password: `password`
-- port: `3306`
+로컬 개발 DB 접속 정보는 개인 환경의 `.env`, `application-secret.yaml`, 또는 로컬 전용 Compose 설정을 기준으로 확인합니다. README에는 실제 계정명이나 비밀번호를 기록하지 않습니다.
 
 ## 로컬 개발 실행
 
@@ -265,15 +266,15 @@ docker run -d \
   --network feedbackme_default \
   -p 8080:8080 \
   -e SPRING_PROFILES_ACTIVE=prod \
-  -e MYSQL_HOST=db \
-  -e MYSQL_PORT=3306 \
-  -e MYSQL_DATABASE=feedbackme \
-  -e MYSQL_USER=user \
-  -e MYSQL_PASSWORD=password \
-  -e REDIS_HOST=redis \
-  -e REDIS_PORT=6379 \
-  -e GEMINI_API_KEY=your-gemini-api-key \
-  -e PAYMENT_DEV_MODE=true \
+  -e MYSQL_HOST=${MYSQL_HOST} \
+  -e MYSQL_PORT=${MYSQL_PORT} \
+  -e MYSQL_DATABASE=${MYSQL_DATABASE} \
+  -e MYSQL_USER=${MYSQL_USER} \
+  -e MYSQL_PASSWORD=${MYSQL_PASSWORD} \
+  -e REDIS_HOST=${REDIS_HOST} \
+  -e REDIS_PORT=${REDIS_PORT} \
+  -e GEMINI_API_KEY=${GEMINI_API_KEY} \
+  -e PAYMENT_DEV_MODE=${PAYMENT_DEV_MODE} \
   feedbackme-app:local
 ```
 
@@ -329,15 +330,7 @@ POST /api/payments/orders/{orderId}/dev-confirm
 
 ## DB 확인
 
-DBeaver 또는 MySQL CLI로 로컬 DB에 접속할 수 있습니다.
-
-```text
-Host: localhost
-Port: 3306
-Database: feedbackme
-Username: user
-Password: password
-```
+DBeaver 또는 MySQL CLI로 로컬 DB에 접속할 수 있습니다. 접속 정보는 개인 로컬 환경의 `.env`, `application-secret.yaml`, 또는 Docker Compose 설정에서 확인하세요. 공개 문서에는 DB 사용자명과 비밀번호를 기록하지 않습니다.
 
 자주 확인하는 테이블:
 
