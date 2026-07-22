@@ -79,3 +79,12 @@ tasks.register('baselineEvaluation') {
 	description = 'Alias for openaiBaselineEvaluation.'
 	dependsOn openaiBaselineEvaluation
 }
+
+tasks.register('harnessComparisonEvaluation', JavaExec) {
+	group = 'verification'
+	description = 'Runs repeated OpenAI Single-step and Harness comparisons.'
+	dependsOn testClasses
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.jyk.feedbackme.evaluation.HarnessComparisonRunner'
+	workingDir = rootDir
+}

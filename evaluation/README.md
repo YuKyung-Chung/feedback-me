@@ -1,5 +1,17 @@
 # FeedbackMe Evaluation
 
+## Automated Single-step vs Harness comparison
+
+From the backend directory, run:
+
+```powershell
+./gradlew harnessComparisonEvaluation
+```
+
+The runner executes TC-01 to TC-05 for both modes (sample and personal candidates), three repetitions by default, and stores raw results plus `summary.json` under `evaluation/runs/comparison-*`.
+
+Use `EVALUATION_REPETITIONS=5` to change repetition count. The summary automatically includes average duration, average usage-based cost, and success rate. Human quality scores remain in each test case's `score.json` so correctness and hallucination judgments are not replaced by a superficial automated score.
+
 FeedbackMe 고도화 전후의 분석 품질을 동일한 입력과 기준으로 비교하기 위한 평가 자료입니다.
 
 ## 디렉터리
