@@ -4,6 +4,8 @@ import com.jyk.feedbackme.analysis.AnalysisStep;
 import com.jyk.feedbackme.analysis.DocumentChunk;
 import com.jyk.feedbackme.analysis.EvidenceValidationResult;
 import com.jyk.feedbackme.analysis.StepSchemaValidationResult;
+import com.jyk.feedbackme.config.HarnessMetrics;
+import io.micrometer.core.instrument.Timer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -25,15 +27,17 @@ public class AnalysisOrchestrator {
     private final EvidenceValidator evidenceValidator;
     private final StepSchemaValidator stepSchemaValidator;
     private final AnalysisRetryPolicy retryPolicy;
+    private final HarnessMetrics metrics;
     @Value("${feedback.analysis.prompt-version:v1.0.0}") private String promptVersion;
 
-    public AnalysisOrchestrator(PromptLoader promptLoader, OpenAiClient openAiClient, DocumentChunker documentChunker, EvidenceValidator evidenceValidator, StepSchemaValidator stepSchemaValidator, AnalysisRetryPolicy retryPolicy) {
+    public AnalysisOrchestrator(PromptLoader promptLoader, OpenAiClient openAiClient, DocumentChunker documentChunker, EvidenceValidator evidenceValidator, StepSchemaValidator stepSchemaValidator, AnalysisRetryPolicy retryPolicy, HarnessMetrics metrics) {
         this.promptLoader = promptLoader;
         this.openAiClient = openAiClient;
         this.documentChunker = documentChunker;
         this.evidenceValidator = evidenceValidator;
         this.stepSchemaValidator = stepSchemaValidator;
         this.retryPolicy = retryPolicy;
+        this.metrics = metrics;
     }
 
     /** 공고·지원자·매칭·갭·보고서 단계를 순서대로 실행합니다. */
@@ -95,16 +99,20 @@ public class AnalysisOrchestrator {
     private String run(AnalysisStep step, String promptName, Map<String, String> variables) throws Exception {
         String prompt = promptLoader.load(promptName, promptVersion, variables);
         Exception lastError = null;
+        Timer.Sample timer = metrics.startStep();
         for (int attempt = 1; attempt <= AnalysisRetryPolicy.MAX_ATTEMPTS; attempt++) {
             try {
                 String output = openAiClient.analyzeStep(step, prompt);
                 if (output == null || output.isBlank()) throw new IllegalStateException("Analysis step returned an empty result: " + step);
                 StepSchemaValidationResult schema = stepSchemaValidator.validate(step, output);
                 if (!schema.valid()) throw new IllegalStateException("Invalid schema at " + step + ": " + schema.errors());
+                metrics.recordStep(timer, step.name());
                 return output;
             } catch (Exception error) {
                 lastError = error;
+                metrics.recordFailure(step.name());
                 if (!retryPolicy.isRetryable(error) || attempt == AnalysisRetryPolicy.MAX_ATTEMPTS) throw error;
+                metrics.recordRetry(step.name());
                 Thread.sleep(retryPolicy.backoffMillis(attempt));
             }
         }

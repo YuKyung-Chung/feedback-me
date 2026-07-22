@@ -4,6 +4,7 @@ import com.jyk.feedbackme.domain.FeedbackHistory;
 import com.jyk.feedbackme.domain.FeedbackStatus;
 import com.jyk.feedbackme.analysis.AnalysisStep;
 import com.jyk.feedbackme.analysis.DocumentChunk;
+import com.jyk.feedbackme.config.HarnessMetrics;
 import com.jyk.feedbackme.repository.FeedbackHistoryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +37,7 @@ public class FeedbackWorker {
     private final CreditService creditService;
     private final DocumentChunker documentChunker;
     private final AnalysisCheckpointService checkpointService;
+    private final HarnessMetrics metrics;
 
     public FeedbackWorker(StringRedisTemplate redisTemplate,
                           FeedbackHistoryRepository feedbackHistoryRepository,
@@ -45,7 +47,8 @@ public class FeedbackWorker {
                           TransactionTemplate transactionTemplate,
                           CreditService creditService,
                           DocumentChunker documentChunker,
-                          AnalysisCheckpointService checkpointService) {
+                          AnalysisCheckpointService checkpointService,
+                          HarnessMetrics metrics) {
         this.redisTemplate = redisTemplate;
         this.feedbackHistoryRepository = feedbackHistoryRepository;
         this.feedbackJobService = feedbackJobService;
@@ -55,6 +58,7 @@ public class FeedbackWorker {
         this.creditService = creditService;
         this.documentChunker = documentChunker;
         this.checkpointService = checkpointService;
+        this.metrics = metrics;
     }
 
     @Scheduled(fixedDelayString = "${feedback.queue.poll-delay-ms:1000}")
@@ -66,9 +70,11 @@ public class FeedbackWorker {
 
         Long historyId = Long.parseLong(historyIdStr);
         log.info("Start feedback job. historyId={}", historyId);
+        long dequeuedAt = System.nanoTime();
 
         try {
             executeFeedbackProcessing(historyId);
+            metrics.recordQueueWait((System.nanoTime() - dequeuedAt) / 1_000_000_000.0);
             log.info("Completed feedback job. historyId={}", historyId);
         } catch (Exception e) {
             log.error("Failed feedback job. historyId={}", historyId, e);
@@ -94,6 +100,7 @@ public class FeedbackWorker {
             List<String> base64Images = Arrays.asList(history.getBase64Images().split(","));
             resultText = openAiClient.analyzeWithVision(history.getJobDescription(), base64Images);
         } else {
+            if (!checkpointService.restoreResults(history.getStepResultsJson()).isEmpty()) metrics.recordCheckpointRecovered();
             resultText = analysisOrchestrator.analyze(
                     history.getJobDescription(),
                     history.getAttachmentText(),
@@ -111,8 +118,8 @@ public class FeedbackWorker {
         if (output == null || output.isBlank()) return;
         transactionTemplate.executeWithoutResult(tx -> feedbackHistoryRepository.findById(historyId).ifPresent(history -> {
             history.recordStepResult(step.name(), output);
-            long estimatedTokens = Math.max(1, output.length() / 4L);
-            history.recordEstimatedCost(estimatedTokens, estimatedTokens * 15.0 / 1_000_000.0);
+            var usage = openAiClient.getLastUsage();
+            history.recordEstimatedCost(usage.inputTokens() + usage.outputTokens(), usage.estimatedCostUsd());
             feedbackHistoryRepository.save(history);
         }));
     }
@@ -144,6 +151,11 @@ public class FeedbackWorker {
                 .ifPresent(history -> {
                     history.completeFeedback(resultText);
                     history.markEvidenceValidation("PASSED");
+                    var usage = openAiClient.getLastUsage();
+                    if (usage.inputTokens() + usage.outputTokens() > 0) {
+                        history.recordEstimatedCost(usage.inputTokens() + usage.outputTokens(), usage.estimatedCostUsd());
+                    }
+                    metrics.recordCompleted();
                     feedbackHistoryRepository.save(history);
                 }));
     }
@@ -177,6 +189,7 @@ public class FeedbackWorker {
                     }
                     history.recordRetry(message);
                     history.failFeedback(message);
+                    metrics.recordFailed();
                     feedbackHistoryRepository.save(history);
                     if (history.getUser() != null) {
                         creditService.refundForFailedAnalysis(history.getUser(), historyId);

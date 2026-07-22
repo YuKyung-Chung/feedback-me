@@ -2,6 +2,8 @@ package com.jyk.feedbackme.service;
 
 import com.jyk.feedbackme.analysis.AnalysisModelRouter;
 import com.jyk.feedbackme.analysis.AnalysisStep;
+import com.jyk.feedbackme.analysis.OpenAiUsage;
+import com.jyk.feedbackme.config.HarnessMetrics;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
@@ -39,17 +41,22 @@ public class OpenAiClient {
     private final PromptLoader promptLoader;
     private final AnalysisModelRouter modelRouter;
     private final HttpClient httpClient;
+    private final HarnessMetrics metrics;
+    private volatile OpenAiUsage lastUsage = new OpenAiUsage(0, 0, "", 0);
 
     @Autowired
-    public OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter) {
-        this(promptLoader, modelRouter, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build());
+    public OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter, HarnessMetrics metrics) {
+        this(promptLoader, modelRouter, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build(), metrics);
     }
 
-    OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter, HttpClient httpClient) {
+    OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter, HttpClient httpClient, HarnessMetrics metrics) {
         this.promptLoader = promptLoader;
         this.modelRouter = modelRouter;
         this.httpClient = httpClient;
+        this.metrics = metrics;
     }
+
+    public OpenAiUsage getLastUsage() { return lastUsage; }
 
     /** 기존 OpenAI single-step 기준선용 보고서 단일 호출입니다. */
     public String analyze(String jobDescription, String attachmentText) throws Exception {
@@ -113,6 +120,7 @@ public class OpenAiClient {
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
                 .build();
+        metrics.recordRequest(model);
 
         HttpResponse<String> response = null;
         long startedAt = System.nanoTime();
@@ -136,10 +144,15 @@ public class OpenAiClient {
 
         JSONObject json = new JSONObject(response.body());
         JSONObject usage = json.optJSONObject("usage");
+        long inputTokens = usage == null ? 0 : usage.optLong("input_tokens");
+        long outputTokens = usage == null ? 0 : usage.optLong("output_tokens");
+        double cost = (inputTokens * 2.5 + outputTokens * 15.0) / 1_000_000.0;
+        lastUsage = new OpenAiUsage(inputTokens, outputTokens, model, cost);
+        metrics.recordTokens(model, inputTokens, outputTokens);
+        metrics.recordCost(cost);
         log.info("OpenAI analysis completed. model={}, durationMs={}, inputTokens={}, outputTokens={}",
                 model, durationMs,
-                usage == null ? 0 : usage.optInt("input_tokens"),
-                usage == null ? 0 : usage.optInt("output_tokens"));
+                inputTokens, outputTokens);
         return extractOutputText(json);
     }
 
