@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.BiConsumer;
+import org.json.JSONObject;
 
 /** 여러 분석 단계를 정해진 순서로 연결하는 하네스 실행 조정자입니다. */
 @Service
@@ -85,7 +86,24 @@ public class AnalysisOrchestrator {
                 "matching", matching,
                 "gaps", gaps));
         onStepCompleted.accept(AnalysisStep.REPORT, report);
-        return report;
+        onStepCompleted.accept(AnalysisStep.VERIFICATION, null);
+        String verification = checkpoint.containsKey(AnalysisStep.VERIFICATION)
+                ? checkpoint.get(AnalysisStep.VERIFICATION)
+                : run(AnalysisStep.VERIFICATION, "verification", Map.of(
+                "report", report,
+                "analyses", jobAnalysis + "\n" + candidateAnalysis + "\n" + matching + "\n" + gaps));
+        onStepCompleted.accept(AnalysisStep.VERIFICATION, verification);
+        return correctedReport(verification, report);
+    }
+
+    private String correctedReport(String verification, String originalReport) {
+        try {
+            JSONObject result = new JSONObject(verification);
+            String corrected = result.optString("correctedReport", "");
+            return corrected.isBlank() ? originalReport : corrected;
+        } catch (Exception ignored) {
+            throw new IllegalStateException("Verification response is not valid JSON.");
+        }
     }
 
     private void validateEvidence(AnalysisStep step, String output, List<DocumentChunk> chunks) {

@@ -24,6 +24,7 @@ public class StepSchemaValidator {
                 case CANDIDATE_ANALYSIS -> requireArray(object, errors, "experiences");
                 case MATCHING -> requireArray(object, errors, "matches");
                 case GAP_ANALYSIS -> requireArray(object, errors, "gaps");
+                case VERIFICATION -> require(object, errors, "valid", "issues", "correctedReport");
                 default -> { }
             }
         } catch (Exception e) {
