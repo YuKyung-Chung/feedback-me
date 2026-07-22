@@ -13,6 +13,10 @@ java {
 	}
 }
 
+tasks.withType(JavaCompile).configureEach {
+	options.encoding = 'UTF-8'
+}
+
 repositories {
 	mavenCentral()
 }
@@ -59,4 +63,13 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+tasks.register('baselineEvaluation', JavaExec) {
+	group = 'verification'
+	description = 'Runs the pre-harness FeedbackMe evaluation cases and stores raw results.'
+	dependsOn testClasses
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.jyk.feedbackme.evaluation.BaselineEvaluationRunner'
+	workingDir = rootDir
 }

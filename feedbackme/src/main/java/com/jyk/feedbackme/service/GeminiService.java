@@ -8,6 +8,7 @@ import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.context.annotation.Profile;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
@@ -22,6 +23,7 @@ import java.util.HexFormat;
 import java.util.List;
 
 @Service
+@Profile("legacy-gemini-baseline")
 public class GeminiService {
 
     private static final String QUEUE_KEY = "feedback:queue";
@@ -33,6 +35,9 @@ public class GeminiService {
 
     @Value("${feedback.cache.result-ttl-seconds:604800}")
     private long resultCacheTtlSeconds;
+
+    @Value("${feedback.analysis.cache-key-version:gemini-legacy-v1}")
+    private String cacheKeyVersion;
 
     private final FeedbackHistoryRepository feedbackHistoryRepository;
     private final RedisTemplate<String, String> redisTemplate;
@@ -319,7 +324,8 @@ public class GeminiService {
     }
 
     private String createCacheKey(String jobDescription, String attachmentText, String base64Images) {
-        String raw = normalize(jobDescription)
+        String raw = normalize(cacheKeyVersion)
+                + "\n---job---\n" + normalize(jobDescription)
                 + "\n---attachment---\n" + normalize(attachmentText)
                 + "\n---images---\n" + normalize(base64Images);
         return CACHE_PREFIX + sha256(raw);

@@ -1,0 +1,20 @@
+{
+  "testCaseId": "TC-00",
+  "runs": [
+    {
+      "run": 1,
+      "requirementExtraction": 0,
+      "candidateAccuracy": 0,
+      "matchingAccuracy": 0,
+      "evidenceGrounding": 0,
+      "hallucinationPrevention": 0,
+      "reportCompleteness": 0,
+      "actionability": 0,
+      "unsupportedClaimCount": 0,
+      "missingRequirementCount": 0,
+      "durationSeconds": 0,
+      "failed": false,
+      "notes": []
+    }
+  ]
+}

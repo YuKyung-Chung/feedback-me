@@ -5,7 +5,7 @@ import com.jyk.feedbackme.repository.FeedbackHistoryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -20,20 +20,23 @@ public class FeedbackWorker {
     private static final Logger log = LoggerFactory.getLogger(FeedbackWorker.class);
     private static final String QUEUE_KEY = "feedback:queue";
 
-    private final RedisTemplate<String, String> redisTemplate;
+    private final StringRedisTemplate redisTemplate;
     private final FeedbackHistoryRepository feedbackHistoryRepository;
-    private final GeminiService geminiService;
+    private final FeedbackJobService feedbackJobService;
+    private final OpenAiClient openAiClient;
     private final TransactionTemplate transactionTemplate;
     private final CreditService creditService;
 
-    public FeedbackWorker(RedisTemplate<String, String> redisTemplate,
+    public FeedbackWorker(StringRedisTemplate redisTemplate,
                           FeedbackHistoryRepository feedbackHistoryRepository,
-                          GeminiService geminiService,
+                          FeedbackJobService feedbackJobService,
+                          OpenAiClient openAiClient,
                           TransactionTemplate transactionTemplate,
                           CreditService creditService) {
         this.redisTemplate = redisTemplate;
         this.feedbackHistoryRepository = feedbackHistoryRepository;
-        this.geminiService = geminiService;
+        this.feedbackJobService = feedbackJobService;
+        this.openAiClient = openAiClient;
         this.transactionTemplate = transactionTemplate;
         this.creditService = creditService;
     }
@@ -63,7 +66,7 @@ public class FeedbackWorker {
             return;
         }
 
-        String cachedResult = geminiService.getCachedResult(history);
+        String cachedResult = feedbackJobService.cachedResult(history);
         if (cachedResult != null) {
             complete(historyId, cachedResult);
             return;
@@ -72,13 +75,13 @@ public class FeedbackWorker {
         String resultText;
         if (history.getBase64Images() != null && !history.getBase64Images().isBlank()) {
             List<String> base64Images = Arrays.asList(history.getBase64Images().split(","));
-            resultText = geminiService.getFeedBackWithVision(history.getJobDescription(), base64Images);
+            resultText = openAiClient.analyzeWithVision(history.getJobDescription(), base64Images);
         } else {
-            resultText = geminiService.getFeedBack(history.getJobDescription(), history.getAttachmentText());
+            resultText = openAiClient.analyze(history.getJobDescription(), history.getAttachmentText());
         }
 
         complete(historyId, resultText);
-        geminiService.cacheResult(history, resultText);
+        feedbackJobService.cacheResult(history, resultText);
     }
 
     private FeedbackHistory markProcessing(Long historyId) {

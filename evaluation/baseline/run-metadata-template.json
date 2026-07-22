@@ -1,0 +1,16 @@
+{
+  "testCaseId": "TC-00",
+  "gitCommit": "",
+  "model": "gemini-2.5-flash-lite",
+  "promptVersion": "legacy-inline",
+  "schemaVersion": "none",
+  "runs": [
+    {
+      "run": 1,
+      "executedAt": "",
+      "durationSeconds": 0,
+      "cacheUsed": false,
+      "status": "COMPLETED"
+    }
+  ]
+}

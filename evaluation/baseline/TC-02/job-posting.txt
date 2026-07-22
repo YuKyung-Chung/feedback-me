@@ -1,0 +1,17 @@
+URL: https://www.saramin.co.kr/zf_user/jobs/relay/view?view_type=search&rec_idx=54219775&location=ts&searchword=Kubernetes&searchType=search&paid_fl=n&search_uuid=dfb33ff8-63d9-4531-99c4-25499093b0b9&t_ref=search&t_ref_content=generic#seq=0
+
+[공고 원문 스냅샷]
+직무: Kubernetes 기반 OpenStack 운영
+
+주요업무
+- Kubernetes 기반 OpenStack 클라우드 운영
+- 컨테이너 기반으로 배포된 OpenStack 환경의 라이프사이클 관리
+- 가상화 환경의 성능 최적화 및 신규 노드 확장·변경 작업
+
+자격요건
+- 경력 무관, 신입 지원 가능
+- 학력 무관
+
+우대사항
+- 해당 직무 근무 경험
+- 정보처리기사 또는 리눅스마스터 2급

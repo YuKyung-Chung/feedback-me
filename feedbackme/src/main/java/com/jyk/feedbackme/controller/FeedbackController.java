@@ -7,7 +7,7 @@ import com.jyk.feedbackme.dto.CrawledJobPosting;
 import com.jyk.feedbackme.repository.FeedbackHistoryRepository;
 import com.jyk.feedbackme.service.CrawlingService;
 import com.jyk.feedbackme.service.FileExtractService;
-import com.jyk.feedbackme.service.GeminiService;
+import com.jyk.feedbackme.service.FeedbackJobService;
 import com.jyk.feedbackme.service.AuthService;
 import com.jyk.feedbackme.service.CreditService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,20 +30,20 @@ import java.util.Map;
 @RequestMapping("/api")
 public class FeedbackController {
 
-    private final GeminiService geminiService;
+    private final FeedbackJobService feedbackJobService;
     private final CrawlingService crawlingService;
     private final FileExtractService fileExtractService;
     private final FeedbackHistoryRepository feedbackHistoryRepository;
     private final AuthService authService;
     private final CreditService creditService;
 
-    public FeedbackController(GeminiService geminiService,
+    public FeedbackController(FeedbackJobService feedbackJobService,
                               CrawlingService crawlingService,
                               FileExtractService fileExtractService,
                               FeedbackHistoryRepository feedbackHistoryRepository,
                               AuthService authService,
                               CreditService creditService) {
-        this.geminiService = geminiService;
+        this.feedbackJobService = feedbackJobService;
         this.crawlingService = crawlingService;
         this.fileExtractService = fileExtractService;
         this.feedbackHistoryRepository = feedbackHistoryRepository;
@@ -97,7 +97,7 @@ public class FeedbackController {
                 attachmentText = fileExtractService.extract(file);
             }
 
-            Long historyId = geminiService.enqueueFeedbackRequest(
+            Long historyId = feedbackJobService.enqueue(
                     user,
                     trimmedUrl,
                     posting.companyName(),
@@ -144,7 +144,7 @@ public class FeedbackController {
         response.put("result", history.getFeedbackResult() != null ? history.getFeedbackResult() : "");
         response.put("updatedAt", history.getUpdatedAt().toString());
 
-        Integer queuePosition = geminiService.getQueuePosition(id);
+        Integer queuePosition = feedbackJobService.queuePosition(id);
         if (queuePosition != null) {
             response.put("queuePosition", queuePosition);
         }

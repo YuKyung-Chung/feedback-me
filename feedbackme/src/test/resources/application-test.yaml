@@ -21,6 +21,17 @@ spring:
 gemini:
   api-key: test-api-key
 
+openai:
+  api-key: test-api-key
+  models:
+    legacy-feedback: gpt-5.6-terra
+
+feedback:
+  analysis:
+    provider: openai
+    prompt-version: v1.0.0
+    cache-key-version: openai-legacy-v1
+
 management:
   endpoints:
     web:

@@ -10,13 +10,14 @@ RUN npm run build
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
 
-COPY gradlew settings.gradle build.gradle ./
+COPY gradlew settings.gradle build.gradle gradle.properties ./
 COPY gradle ./gradle
 RUN chmod +x ./gradlew
 
 COPY src ./src
 COPY --from=frontend-build /frontend/dist ./src/main/resources/static
-RUN ./gradlew clean bootJar --no-daemon
+RUN --mount=type=cache,target=/root/.gradle ./gradlew test --no-daemon
+RUN --mount=type=cache,target=/root/.gradle ./gradlew clean bootJar --no-daemon
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app

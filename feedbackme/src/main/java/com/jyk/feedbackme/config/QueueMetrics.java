@@ -3,20 +3,20 @@ package com.jyk.feedbackme.config;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import org.springframework.context.annotation.Profile;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 @Component // 스프링이 켜질 때 이 클래스를 자동으로 빈(Bean)으로 등록합니다.
 @Profile("!test")
 public class QueueMetrics {
 
-    private final RedisTemplate<String, String> redisTemplate;
+    private final StringRedisTemplate redisTemplate;
     private final MeterRegistry registry; // 스프링이 미리 만들어둔 모니터링 등록 장부
 
     private static final String QUEUE_KEY = "feedback:queue";
 
     // 생성자를 통해 스프링이 만들어둔 RedisTemplate과 MeterRegistry를 주입받습니다.
-    public QueueMetrics(RedisTemplate<String, String> redisTemplate, MeterRegistry registry) {
+    public QueueMetrics(StringRedisTemplate redisTemplate, MeterRegistry registry) {
         this.redisTemplate = redisTemplate;
         this.registry = registry;
     }

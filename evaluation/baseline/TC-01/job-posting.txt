@@ -1,0 +1,21 @@
+URL: https://www.saramin.co.kr/zf_user/jobs/relay/view?view_type=search&rec_idx=54005304&location=ts&searchword=java%2C+spring&searchType=search&paid_fl=n&search_uuid=5d7bc609-e60e-4918-856c-c4da70a07362&t_ref=search&t_ref_content=generic#seq=0
+
+[공고 원문 스냅샷]
+회사: 코너스톤테크놀러지(주)
+직무: 기업용 솔루션 Java Spring Backend 개발자
+
+주요업무
+- Spring 기반의 프로그램 및 테스트 코드를 개발합니다.
+- 요구사항, 시나리오, 알고리즘 등을 화이트보드에서 토론합니다.
+- 연구개발팀 소속으로 근무합니다.
+
+자격요건
+- 경력 무관, 신입 지원 가능
+- 대학교 졸업(4년제) 이상, 졸업 예정자 지원 가능
+- 인근 거주자 또는 출근 소요시간 1시간 미만 필수
+
+우대사항
+- 공학계열 또는 자연계열 전공
+
+전형절차
+- 서류전형 → 면접(SQL/코딩 테스트) → 실무·심층 테스트 → 최종합격

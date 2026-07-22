@@ -1,6 +1,40 @@
-version: '3.8'
-
 services:
+  app:
+    build:
+      context: ./feedbackme
+      dockerfile: Dockerfile
+    container_name: feedbackme-app
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      MYSQL_HOST: db
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./feedbackme/frontend
+      dockerfile: Dockerfile
+    container_name: feedbackme-frontend
+    environment:
+      VITE_API_PROXY: http://app:8080
+    ports:
+      - "5173:5173"
+    depends_on:
+      - app
+
   db:
     image: mysql:8.0
     container_name: feedbackme-mysql
@@ -17,6 +51,11 @@ services:
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   # Redis 추가
   redis:
     image: redis:alpine

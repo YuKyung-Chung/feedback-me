@@ -1,0 +1,32 @@
+URL: https://www.saramin.co.kr/zf_user/jobs/relay/view?view_type=search&rec_idx=54197618&location=ts&searchword=%EA%B8%88%EC%9C%B5+it&searchType=search&paid_fl=n&search_uuid=90efb120-6f63-431b-ba0a-44f70a3cbbb6&t_ref=search&t_ref_content=generic#seq=0
+
+[공고 원문 스냅샷]
+직무: 금융IT 수석 개발자(경력 5년 이상)
+
+회사 및 프로젝트
+- 은행, 카드, 증권, PG, 선불 등 금융 서비스의 시스템 구축 및 운영
+- AI 기반 이상거래 탐지(FDS) 및 금융 데이터 처리 시스템 구축
+- AWS 및 Oracle 공식 파트너사
+
+담당업무
+- Spring·Java 기반 웹 금융 시스템 개발
+- 금융권 FDS 솔루션 구축
+- 데이터 수집, 탐지, 배치, 프로파일링 모듈 개발
+- 금융 데이터 마이그레이션 및 시스템 연동
+- 금융권 프로젝트 기술 지원 및 개발 리딩
+
+자격요건
+- 개발 경력 5년 이상
+- Java·Spring 기반 웹 애플리케이션 개발 경험
+- 금융 SI 프로젝트 또는 금융 서비스 시스템 개발 경험
+- 은행·카드·증권·선불·PG 등 금융 도메인 이해
+- REST API 개발 경험
+- RDBMS 데이터 처리 및 SQL 작성 능력
+
+우대사항
+- FDS 구축 또는 운영 경험
+- 대용량 트랜잭션 처리 시스템 개발 경험
+- Kafka 또는 MQ 기반 시스템 개발 경험
+- 금융 데이터 분석 또는 탐지 시스템 개발 경험
+- 금융권 프로젝트 기술 리딩 경험
+- Spring Boot 서비스 아키텍처 설계 경험

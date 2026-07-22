@@ -30,6 +30,10 @@ docker/mysql/data/
 docker/grafana/data/
 application-secret.yaml
 
+# Personal evaluation inputs
+evaluation/**/candidate-personal.pdf
+evaluation/runs/
+
 # Frontend dependencies and build output
 feedbackme/frontend/node_modules/
 feedbackme/frontend/dist/
