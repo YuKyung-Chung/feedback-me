@@ -78,6 +78,9 @@ public class FeedbackHistory {
 
     private String evidenceValidationStatus;
 
+    @Column(columnDefinition = "LONGTEXT")
+    private String stepResultsJson;
+
     @Builder
     public FeedbackHistory(AppUser user, String jobUrl, String companyName, String jobTitle, String attachmentName, String jobDescription, String attachmentText, String base64Images, FeedbackStatus status) {
         this.user = user;
@@ -140,6 +143,13 @@ public class FeedbackHistory {
 
     public void markEvidenceValidation(String validationStatus) {
         this.evidenceValidationStatus = validationStatus;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /** 단계별 분석 결과를 JSON 문자열 체크포인트로 누적합니다. */
+    public void recordStepResult(String step, String result) {
+        String entry = "{\"step\":\"" + step + "\",\"result\":\"" + result.replace("\\", "\\\\").replace("\"", "\\\"") + "\"}";
+        this.stepResultsJson = (this.stepResultsJson == null || this.stepResultsJson.isBlank()) ? "[" + entry + "]" : this.stepResultsJson.replaceAll("\\]$", "," + entry + "]");
         this.updatedAt = LocalDateTime.now();
     }
 }

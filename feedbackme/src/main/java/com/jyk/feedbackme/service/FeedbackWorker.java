@@ -94,11 +94,22 @@ public class FeedbackWorker {
             resultText = analysisOrchestrator.analyze(
                     history.getJobDescription(),
                     history.getAttachmentText(),
-                    step -> updateStep(historyId, step));
+                    (step, output) -> {
+                        updateStep(historyId, step);
+                        saveStepResult(historyId, step, output);
+                    });
         }
 
         complete(historyId, resultText);
         feedbackJobService.cacheResult(history, resultText);
+    }
+
+    private void saveStepResult(Long historyId, AnalysisStep step, String output) {
+        if (output == null || output.isBlank()) return;
+        transactionTemplate.executeWithoutResult(tx -> feedbackHistoryRepository.findById(historyId).ifPresent(history -> {
+            history.recordStepResult(step.name(), output);
+            feedbackHistoryRepository.save(history);
+        }));
     }
 
     private void saveEvidenceCheckpoint(FeedbackHistory history) {

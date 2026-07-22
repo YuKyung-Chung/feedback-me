@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import java.util.Map;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 /** 여러 분석 단계를 정해진 순서로 연결하는 하네스 실행 조정자입니다. */
 @Service
@@ -35,35 +36,46 @@ public class AnalysisOrchestrator {
 
     /** 공고·지원자·매칭·갭·보고서 단계를 순서대로 실행합니다. */
     public String analyze(String jobPosting, String candidateMaterial) throws Exception {
-        return analyze(jobPosting, candidateMaterial, step -> { });
+        return analyze(jobPosting, candidateMaterial, (step, output) -> { });
     }
 
     /** 각 단계 시작 시 콜백을 호출해 작업 상태 저장소와 연동합니다. */
     public String analyze(String jobPosting, String candidateMaterial, Consumer<AnalysisStep> onStepStarted) throws Exception {
+        return analyze(jobPosting, candidateMaterial, (step, output) -> onStepStarted.accept(step));
+    }
+
+    /** 단계 시작과 결과를 모두 전달해 작업 저장소가 체크포인트를 기록하도록 합니다. */
+    public String analyze(String jobPosting, String candidateMaterial, BiConsumer<AnalysisStep, String> onStepCompleted) throws Exception {
         List<DocumentChunk> chunks = new java.util.ArrayList<>();
         chunks.addAll(documentChunker.chunk("job", jobPosting));
         chunks.addAll(documentChunker.chunk("candidate", candidateMaterial));
         String jobEvidence = documentChunker.formatForPrompt(documentChunker.chunk("job", jobPosting));
         String candidateEvidence = documentChunker.formatForPrompt(documentChunker.chunk("candidate", candidateMaterial));
-        onStepStarted.accept(AnalysisStep.JOB_ANALYSIS);
+        onStepCompleted.accept(AnalysisStep.JOB_ANALYSIS, null);
         String jobAnalysis = run(AnalysisStep.JOB_ANALYSIS, "job-analysis", Map.of("jobPosting", jobEvidence));
+        onStepCompleted.accept(AnalysisStep.JOB_ANALYSIS, jobAnalysis);
         validateEvidence(AnalysisStep.JOB_ANALYSIS, jobAnalysis, chunks);
-        onStepStarted.accept(AnalysisStep.CANDIDATE_ANALYSIS);
+        onStepCompleted.accept(AnalysisStep.CANDIDATE_ANALYSIS, null);
         String candidateAnalysis = run(AnalysisStep.CANDIDATE_ANALYSIS, "candidate-analysis", Map.of("candidateMaterial", candidateEvidence));
+        onStepCompleted.accept(AnalysisStep.CANDIDATE_ANALYSIS, candidateAnalysis);
         validateEvidence(AnalysisStep.CANDIDATE_ANALYSIS, candidateAnalysis, chunks);
-        onStepStarted.accept(AnalysisStep.MATCHING);
+        onStepCompleted.accept(AnalysisStep.MATCHING, null);
         String matching = run(AnalysisStep.MATCHING, "matching", Map.of(
                 "jobAnalysis", jobAnalysis,
                 "candidateAnalysis", candidateAnalysis));
+        onStepCompleted.accept(AnalysisStep.MATCHING, matching);
         validateEvidence(AnalysisStep.MATCHING, matching, chunks);
-        onStepStarted.accept(AnalysisStep.GAP_ANALYSIS);
+        onStepCompleted.accept(AnalysisStep.GAP_ANALYSIS, null);
         String gaps = run(AnalysisStep.GAP_ANALYSIS, "gap-analysis", Map.of("matching", matching));
-        onStepStarted.accept(AnalysisStep.REPORT);
-        return run(AnalysisStep.REPORT, "report", Map.of(
+        onStepCompleted.accept(AnalysisStep.GAP_ANALYSIS, gaps);
+        onStepCompleted.accept(AnalysisStep.REPORT, null);
+        String report = run(AnalysisStep.REPORT, "report", Map.of(
                 "jobAnalysis", jobAnalysis,
                 "candidateAnalysis", candidateAnalysis,
                 "matching", matching,
                 "gaps", gaps));
+        onStepCompleted.accept(AnalysisStep.REPORT, report);
+        return report;
     }
 
     private void validateEvidence(AnalysisStep step, String output, List<DocumentChunk> chunks) {
