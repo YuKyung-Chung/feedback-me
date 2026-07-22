@@ -35,6 +35,7 @@ public class FeedbackWorker {
     private final TransactionTemplate transactionTemplate;
     private final CreditService creditService;
     private final DocumentChunker documentChunker;
+    private final AnalysisCheckpointService checkpointService;
 
     public FeedbackWorker(StringRedisTemplate redisTemplate,
                           FeedbackHistoryRepository feedbackHistoryRepository,
@@ -43,7 +44,8 @@ public class FeedbackWorker {
                           AnalysisOrchestrator analysisOrchestrator,
                           TransactionTemplate transactionTemplate,
                           CreditService creditService,
-                          DocumentChunker documentChunker) {
+                          DocumentChunker documentChunker,
+                          AnalysisCheckpointService checkpointService) {
         this.redisTemplate = redisTemplate;
         this.feedbackHistoryRepository = feedbackHistoryRepository;
         this.feedbackJobService = feedbackJobService;
@@ -52,6 +54,7 @@ public class FeedbackWorker {
         this.transactionTemplate = transactionTemplate;
         this.creditService = creditService;
         this.documentChunker = documentChunker;
+        this.checkpointService = checkpointService;
     }
 
     @Scheduled(fixedDelayString = "${feedback.queue.poll-delay-ms:1000}")
@@ -97,7 +100,7 @@ public class FeedbackWorker {
                     (step, output) -> {
                         updateStep(historyId, step);
                         saveStepResult(historyId, step, output);
-                    });
+                    }, checkpointService.restoreResults(history.getStepResultsJson()));
         }
 
         complete(historyId, resultText);

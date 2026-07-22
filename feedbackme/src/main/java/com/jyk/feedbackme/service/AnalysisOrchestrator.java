@@ -46,30 +46,34 @@ public class AnalysisOrchestrator {
 
     /** 단계 시작과 결과를 모두 전달해 작업 저장소가 체크포인트를 기록하도록 합니다. */
     public String analyze(String jobPosting, String candidateMaterial, BiConsumer<AnalysisStep, String> onStepCompleted) throws Exception {
+        return analyze(jobPosting, candidateMaterial, onStepCompleted, new java.util.EnumMap<>(AnalysisStep.class));
+    }
+
+    public String analyze(String jobPosting, String candidateMaterial, BiConsumer<AnalysisStep, String> onStepCompleted, Map<AnalysisStep, String> checkpoint) throws Exception {
         List<DocumentChunk> chunks = new java.util.ArrayList<>();
         chunks.addAll(documentChunker.chunk("job", jobPosting));
         chunks.addAll(documentChunker.chunk("candidate", candidateMaterial));
         String jobEvidence = documentChunker.formatForPrompt(documentChunker.chunk("job", jobPosting));
         String candidateEvidence = documentChunker.formatForPrompt(documentChunker.chunk("candidate", candidateMaterial));
         onStepCompleted.accept(AnalysisStep.JOB_ANALYSIS, null);
-        String jobAnalysis = run(AnalysisStep.JOB_ANALYSIS, "job-analysis", Map.of("jobPosting", jobEvidence));
+        String jobAnalysis = checkpoint.containsKey(AnalysisStep.JOB_ANALYSIS) ? checkpoint.get(AnalysisStep.JOB_ANALYSIS) : run(AnalysisStep.JOB_ANALYSIS, "job-analysis", Map.of("jobPosting", jobEvidence));
         onStepCompleted.accept(AnalysisStep.JOB_ANALYSIS, jobAnalysis);
         validateEvidence(AnalysisStep.JOB_ANALYSIS, jobAnalysis, chunks);
         onStepCompleted.accept(AnalysisStep.CANDIDATE_ANALYSIS, null);
-        String candidateAnalysis = run(AnalysisStep.CANDIDATE_ANALYSIS, "candidate-analysis", Map.of("candidateMaterial", candidateEvidence));
+        String candidateAnalysis = checkpoint.containsKey(AnalysisStep.CANDIDATE_ANALYSIS) ? checkpoint.get(AnalysisStep.CANDIDATE_ANALYSIS) : run(AnalysisStep.CANDIDATE_ANALYSIS, "candidate-analysis", Map.of("candidateMaterial", candidateEvidence));
         onStepCompleted.accept(AnalysisStep.CANDIDATE_ANALYSIS, candidateAnalysis);
         validateEvidence(AnalysisStep.CANDIDATE_ANALYSIS, candidateAnalysis, chunks);
         onStepCompleted.accept(AnalysisStep.MATCHING, null);
-        String matching = run(AnalysisStep.MATCHING, "matching", Map.of(
+        String matching = checkpoint.containsKey(AnalysisStep.MATCHING) ? checkpoint.get(AnalysisStep.MATCHING) : run(AnalysisStep.MATCHING, "matching", Map.of(
                 "jobAnalysis", jobAnalysis,
                 "candidateAnalysis", candidateAnalysis));
         onStepCompleted.accept(AnalysisStep.MATCHING, matching);
         validateEvidence(AnalysisStep.MATCHING, matching, chunks);
         onStepCompleted.accept(AnalysisStep.GAP_ANALYSIS, null);
-        String gaps = run(AnalysisStep.GAP_ANALYSIS, "gap-analysis", Map.of("matching", matching));
+        String gaps = checkpoint.containsKey(AnalysisStep.GAP_ANALYSIS) ? checkpoint.get(AnalysisStep.GAP_ANALYSIS) : run(AnalysisStep.GAP_ANALYSIS, "gap-analysis", Map.of("matching", matching));
         onStepCompleted.accept(AnalysisStep.GAP_ANALYSIS, gaps);
         onStepCompleted.accept(AnalysisStep.REPORT, null);
-        String report = run(AnalysisStep.REPORT, "report", Map.of(
+        String report = checkpoint.containsKey(AnalysisStep.REPORT) ? checkpoint.get(AnalysisStep.REPORT) : run(AnalysisStep.REPORT, "report", Map.of(
                 "jobAnalysis", jobAnalysis,
                 "candidateAnalysis", candidateAnalysis,
                 "matching", matching,
