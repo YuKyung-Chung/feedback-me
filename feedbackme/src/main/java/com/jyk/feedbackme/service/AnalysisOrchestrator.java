@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
+import java.util.function.Consumer;
 
 /** 여러 분석 단계를 정해진 순서로 연결하는 하네스 실행 조정자입니다. */
 @Service
@@ -24,12 +25,22 @@ public class AnalysisOrchestrator {
 
     /** 공고·지원자·매칭·갭·보고서 단계를 순서대로 실행합니다. */
     public String analyze(String jobPosting, String candidateMaterial) throws Exception {
+        return analyze(jobPosting, candidateMaterial, step -> { });
+    }
+
+    /** 각 단계 시작 시 콜백을 호출해 작업 상태 저장소와 연동합니다. */
+    public String analyze(String jobPosting, String candidateMaterial, Consumer<AnalysisStep> onStepStarted) throws Exception {
+        onStepStarted.accept(AnalysisStep.JOB_ANALYSIS);
         String jobAnalysis = run(AnalysisStep.JOB_ANALYSIS, "job-analysis", Map.of("jobPosting", safe(jobPosting)));
+        onStepStarted.accept(AnalysisStep.CANDIDATE_ANALYSIS);
         String candidateAnalysis = run(AnalysisStep.CANDIDATE_ANALYSIS, "candidate-analysis", Map.of("candidateMaterial", safe(candidateMaterial)));
+        onStepStarted.accept(AnalysisStep.MATCHING);
         String matching = run(AnalysisStep.MATCHING, "matching", Map.of(
                 "jobAnalysis", jobAnalysis,
                 "candidateAnalysis", candidateAnalysis));
+        onStepStarted.accept(AnalysisStep.GAP_ANALYSIS);
         String gaps = run(AnalysisStep.GAP_ANALYSIS, "gap-analysis", Map.of("matching", matching));
+        onStepStarted.accept(AnalysisStep.REPORT);
         return run(AnalysisStep.REPORT, "report", Map.of(
                 "jobAnalysis", jobAnalysis,
                 "candidateAnalysis", candidateAnalysis,

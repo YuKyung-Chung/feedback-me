@@ -1,6 +1,8 @@
 package com.jyk.feedbackme.service;
 
 import com.jyk.feedbackme.domain.FeedbackHistory;
+import com.jyk.feedbackme.domain.FeedbackStatus;
+import com.jyk.feedbackme.analysis.AnalysisStep;
 import com.jyk.feedbackme.repository.FeedbackHistoryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,7 +65,7 @@ public class FeedbackWorker {
             log.info("Completed feedback job. historyId={}", historyId);
         } catch (Exception e) {
             log.error("Failed feedback job. historyId={}", historyId, e);
-            updateToFailed(historyId);
+            updateToFailed(historyId, e);
         }
     }
 
@@ -84,7 +86,10 @@ public class FeedbackWorker {
             List<String> base64Images = Arrays.asList(history.getBase64Images().split(","));
             resultText = openAiClient.analyzeWithVision(history.getJobDescription(), base64Images);
         } else {
-            resultText = analysisOrchestrator.analyze(history.getJobDescription(), history.getAttachmentText());
+            resultText = analysisOrchestrator.analyze(
+                    history.getJobDescription(),
+                    history.getAttachmentText(),
+                    step -> updateStep(historyId, step));
         }
 
         complete(historyId, resultText);
@@ -108,10 +113,27 @@ public class FeedbackWorker {
                 }));
     }
 
-    private void updateToFailed(Long historyId) {
+    private void updateStep(Long historyId, AnalysisStep step) {
+        FeedbackStatus status = switch (step) {
+            case JOB_ANALYSIS -> FeedbackStatus.JOB_ANALYZING;
+            case CANDIDATE_ANALYSIS -> FeedbackStatus.CANDIDATE_ANALYZING;
+            case MATCHING -> FeedbackStatus.MATCHING;
+            case GAP_ANALYSIS -> FeedbackStatus.GAP_ANALYZING;
+            case REPORT -> FeedbackStatus.REPORTING;
+            case VERIFICATION -> FeedbackStatus.VERIFYING;
+        };
+        transactionTemplate.executeWithoutResult(tx -> feedbackHistoryRepository.findById(historyId)
+                .ifPresent(history -> {
+                    history.moveTo(status, step);
+                    feedbackHistoryRepository.save(history);
+                }));
+    }
+
+    private void updateToFailed(Long historyId, Exception error) {
         transactionTemplate.executeWithoutResult(status -> feedbackHistoryRepository.findById(historyId)
                 .ifPresent(history -> {
-                    history.failFeedback();
+                    history.recordRetry(error.getMessage() != null ? error.getMessage() : error.getClass().getSimpleName());
+                    history.failFeedback(error.getMessage() != null ? error.getMessage() : error.getClass().getSimpleName());
                     feedbackHistoryRepository.save(history);
                     if (history.getUser() != null) {
                         creditService.refundForFailedAnalysis(history.getUser(), historyId);

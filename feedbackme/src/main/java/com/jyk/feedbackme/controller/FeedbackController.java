@@ -145,6 +145,9 @@ public class FeedbackController {
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("status", history.getStatus().name());
+        response.put("currentStep", history.getCurrentStep() != null ? history.getCurrentStep().name() : "");
+        response.put("retryCount", history.getRetryCount());
+        response.put("lastError", history.getLastError() != null ? history.getLastError() : "");
         response.put("result", history.getFeedbackResult() != null ? history.getFeedbackResult() : "");
         response.put("updatedAt", history.getUpdatedAt().toString());
 

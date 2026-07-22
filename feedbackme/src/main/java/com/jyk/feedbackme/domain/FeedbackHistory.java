@@ -1,5 +1,6 @@
 package com.jyk.feedbackme.domain;
 
+import com.jyk.feedbackme.analysis.AnalysisStep;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -59,8 +60,18 @@ public class FeedbackHistory {
     @Enumerated(EnumType.STRING)
     private FeedbackStatus status;
 
+    @Enumerated(EnumType.STRING)
+    private AnalysisStep currentStep;
+
+    private int retryCount;
+
+    @Column(columnDefinition = "TEXT")
+    private String lastError;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private LocalDateTime startedAt;
+    private LocalDateTime completedAt;
 
     @Builder
     public FeedbackHistory(AppUser user, String jobUrl, String companyName, String jobTitle, String attachmentName, String jobDescription, String attachmentText, String base64Images, FeedbackStatus status) {
@@ -73,23 +84,45 @@ public class FeedbackHistory {
         this.attachmentText = attachmentText;
         this.base64Images = base64Images;
         this.status = status;
+        this.retryCount = 0;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }
 
     public void startProcessing() {
         this.status = FeedbackStatus.PROCESSING;
+        this.startedAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void moveTo(FeedbackStatus status, AnalysisStep step) {
+        this.status = status;
+        this.currentStep = step;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void recordRetry(String errorMessage) {
+        this.retryCount++;
+        this.lastError = errorMessage;
         this.updatedAt = LocalDateTime.now();
     }
 
     public void completeFeedback(String feedbackResult) {
         this.feedbackResult = feedbackResult;
         this.status = FeedbackStatus.COMPLETED;
+        this.completedAt = LocalDateTime.now();
+        this.lastError = null;
         this.updatedAt = LocalDateTime.now();
     }
 
     public void failFeedback() {
         this.status = FeedbackStatus.FAILED;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void failFeedback(String errorMessage) {
+        this.status = FeedbackStatus.FAILED;
+        this.lastError = errorMessage;
         this.updatedAt = LocalDateTime.now();
     }
 }
