@@ -3,6 +3,7 @@ package com.jyk.feedbackme.service;
 import com.jyk.feedbackme.analysis.AnalysisStep;
 import com.jyk.feedbackme.analysis.DocumentChunk;
 import com.jyk.feedbackme.analysis.EvidenceValidationResult;
+import com.jyk.feedbackme.analysis.StepSchemaValidationResult;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -21,13 +22,15 @@ public class AnalysisOrchestrator {
     private final OpenAiClient openAiClient;
     private final DocumentChunker documentChunker;
     private final EvidenceValidator evidenceValidator;
+    private final StepSchemaValidator stepSchemaValidator;
     @Value("${feedback.analysis.prompt-version:v1.0.0}") private String promptVersion;
 
-    public AnalysisOrchestrator(PromptLoader promptLoader, OpenAiClient openAiClient, DocumentChunker documentChunker, EvidenceValidator evidenceValidator) {
+    public AnalysisOrchestrator(PromptLoader promptLoader, OpenAiClient openAiClient, DocumentChunker documentChunker, EvidenceValidator evidenceValidator, StepSchemaValidator stepSchemaValidator) {
         this.promptLoader = promptLoader;
         this.openAiClient = openAiClient;
         this.documentChunker = documentChunker;
         this.evidenceValidator = evidenceValidator;
+        this.stepSchemaValidator = stepSchemaValidator;
     }
 
     /** 공고·지원자·매칭·갭·보고서 단계를 순서대로 실행합니다. */
@@ -77,6 +80,8 @@ public class AnalysisOrchestrator {
         if (output == null || output.isBlank()) {
             throw new IllegalStateException("Analysis step returned an empty result: " + step);
         }
+        StepSchemaValidationResult schema = stepSchemaValidator.validate(step, output);
+        if (!schema.valid()) throw new IllegalStateException("Invalid schema at " + step + ": " + schema.errors());
         return output;
     }
 
