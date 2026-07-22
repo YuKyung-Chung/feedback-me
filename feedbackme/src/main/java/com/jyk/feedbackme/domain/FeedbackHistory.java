@@ -73,6 +73,11 @@ public class FeedbackHistory {
     private LocalDateTime startedAt;
     private LocalDateTime completedAt;
 
+    @Column(columnDefinition = "LONGTEXT")
+    private String documentChunksJson;
+
+    private String evidenceValidationStatus;
+
     @Builder
     public FeedbackHistory(AppUser user, String jobUrl, String companyName, String jobTitle, String attachmentName, String jobDescription, String attachmentText, String base64Images, FeedbackStatus status) {
         this.user = user;
@@ -123,6 +128,18 @@ public class FeedbackHistory {
     public void failFeedback(String errorMessage) {
         this.status = FeedbackStatus.FAILED;
         this.lastError = errorMessage;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /** 실행 시점의 청크 목록과 근거 검증 상태를 체크포인트로 기록합니다. */
+    public void recordEvidenceCheckpoint(String chunksJson, String validationStatus) {
+        this.documentChunksJson = chunksJson;
+        this.evidenceValidationStatus = validationStatus;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void markEvidenceValidation(String validationStatus) {
+        this.evidenceValidationStatus = validationStatus;
         this.updatedAt = LocalDateTime.now();
     }
 }

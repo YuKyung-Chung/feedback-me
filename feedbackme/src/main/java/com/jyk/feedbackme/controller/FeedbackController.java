@@ -148,6 +148,7 @@ public class FeedbackController {
         response.put("currentStep", history.getCurrentStep() != null ? history.getCurrentStep().name() : "");
         response.put("retryCount", history.getRetryCount());
         response.put("lastError", history.getLastError() != null ? history.getLastError() : "");
+        response.put("evidenceValidationStatus", history.getEvidenceValidationStatus() != null ? history.getEvidenceValidationStatus() : "");
         response.put("result", history.getFeedbackResult() != null ? history.getFeedbackResult() : "");
         response.put("updatedAt", history.getUpdatedAt().toString());
 

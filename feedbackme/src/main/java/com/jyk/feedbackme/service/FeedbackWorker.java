@@ -3,6 +3,7 @@ package com.jyk.feedbackme.service;
 import com.jyk.feedbackme.domain.FeedbackHistory;
 import com.jyk.feedbackme.domain.FeedbackStatus;
 import com.jyk.feedbackme.analysis.AnalysisStep;
+import com.jyk.feedbackme.analysis.DocumentChunk;
 import com.jyk.feedbackme.repository.FeedbackHistoryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +34,7 @@ public class FeedbackWorker {
     private final AnalysisOrchestrator analysisOrchestrator;
     private final TransactionTemplate transactionTemplate;
     private final CreditService creditService;
+    private final DocumentChunker documentChunker;
 
     public FeedbackWorker(StringRedisTemplate redisTemplate,
                           FeedbackHistoryRepository feedbackHistoryRepository,
@@ -40,7 +42,8 @@ public class FeedbackWorker {
                           OpenAiClient openAiClient,
                           AnalysisOrchestrator analysisOrchestrator,
                           TransactionTemplate transactionTemplate,
-                          CreditService creditService) {
+                          CreditService creditService,
+                          DocumentChunker documentChunker) {
         this.redisTemplate = redisTemplate;
         this.feedbackHistoryRepository = feedbackHistoryRepository;
         this.feedbackJobService = feedbackJobService;
@@ -48,6 +51,7 @@ public class FeedbackWorker {
         this.analysisOrchestrator = analysisOrchestrator;
         this.transactionTemplate = transactionTemplate;
         this.creditService = creditService;
+        this.documentChunker = documentChunker;
     }
 
     @Scheduled(fixedDelayString = "${feedback.queue.poll-delay-ms:1000}")
@@ -82,6 +86,7 @@ public class FeedbackWorker {
         }
 
         String resultText;
+        saveEvidenceCheckpoint(history);
         if (history.getBase64Images() != null && !history.getBase64Images().isBlank()) {
             List<String> base64Images = Arrays.asList(history.getBase64Images().split(","));
             resultText = openAiClient.analyzeWithVision(history.getJobDescription(), base64Images);
@@ -94,6 +99,19 @@ public class FeedbackWorker {
 
         complete(historyId, resultText);
         feedbackJobService.cacheResult(history, resultText);
+    }
+
+    private void saveEvidenceCheckpoint(FeedbackHistory history) {
+        List<DocumentChunk> chunks = new java.util.ArrayList<>();
+        chunks.addAll(documentChunker.chunk("job", history.getJobDescription()));
+        chunks.addAll(documentChunker.chunk("candidate", history.getAttachmentText()));
+        String serialized = chunks.stream()
+                .map(chunk -> "{\"chunkId\":\"" + chunk.chunkId() + "\",\"source\":\"" + chunk.source() + "\",\"text\":\"" + chunk.text().replace("\\", "\\\\").replace("\"", "\\\"") + "\"}")
+                .reduce((a, b) -> a + "," + b).map(value -> "[" + value + "]").orElse("[]");
+        transactionTemplate.executeWithoutResult(tx -> feedbackHistoryRepository.findById(history.getId()).ifPresent(current -> {
+            current.recordEvidenceCheckpoint(serialized, "PENDING");
+            feedbackHistoryRepository.save(current);
+        }));
     }
 
     private FeedbackHistory markProcessing(Long historyId) {
@@ -109,6 +127,7 @@ public class FeedbackWorker {
         transactionTemplate.executeWithoutResult(status -> feedbackHistoryRepository.findById(historyId)
                 .ifPresent(history -> {
                     history.completeFeedback(resultText);
+                    history.markEvidenceValidation("PASSED");
                     feedbackHistoryRepository.save(history);
                 }));
     }
