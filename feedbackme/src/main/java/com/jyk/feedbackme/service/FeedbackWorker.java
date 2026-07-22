@@ -15,6 +15,10 @@ import java.util.List;
 
 @Component
 @Profile("!test")
+/**
+ * FeedbackMe 백엔드의 FeedbackWorker 구성 요소입니다.
+ * 이 파일은 com.jyk.feedbackme.service 계층의 책임을 담당합니다.
+ */
 public class FeedbackWorker {
 
     private static final Logger log = LoggerFactory.getLogger(FeedbackWorker.class);
@@ -24,6 +28,7 @@ public class FeedbackWorker {
     private final FeedbackHistoryRepository feedbackHistoryRepository;
     private final FeedbackJobService feedbackJobService;
     private final OpenAiClient openAiClient;
+    private final AnalysisOrchestrator analysisOrchestrator;
     private final TransactionTemplate transactionTemplate;
     private final CreditService creditService;
 
@@ -31,12 +36,14 @@ public class FeedbackWorker {
                           FeedbackHistoryRepository feedbackHistoryRepository,
                           FeedbackJobService feedbackJobService,
                           OpenAiClient openAiClient,
+                          AnalysisOrchestrator analysisOrchestrator,
                           TransactionTemplate transactionTemplate,
                           CreditService creditService) {
         this.redisTemplate = redisTemplate;
         this.feedbackHistoryRepository = feedbackHistoryRepository;
         this.feedbackJobService = feedbackJobService;
         this.openAiClient = openAiClient;
+        this.analysisOrchestrator = analysisOrchestrator;
         this.transactionTemplate = transactionTemplate;
         this.creditService = creditService;
     }
@@ -77,7 +84,7 @@ public class FeedbackWorker {
             List<String> base64Images = Arrays.asList(history.getBase64Images().split(","));
             resultText = openAiClient.analyzeWithVision(history.getJobDescription(), base64Images);
         } else {
-            resultText = openAiClient.analyze(history.getJobDescription(), history.getAttachmentText());
+            resultText = analysisOrchestrator.analyze(history.getJobDescription(), history.getAttachmentText());
         }
 
         complete(historyId, resultText);

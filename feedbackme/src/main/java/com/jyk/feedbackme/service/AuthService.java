@@ -20,6 +20,10 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 @Service
+/**
+ * FeedbackMe 백엔드의 AuthService 구성 요소입니다.
+ * 이 파일은 com.jyk.feedbackme.service 계층의 책임을 담당합니다.
+ */
 public class AuthService {
 
     public static final String SESSION_COOKIE_NAME = "feedbackme_session";

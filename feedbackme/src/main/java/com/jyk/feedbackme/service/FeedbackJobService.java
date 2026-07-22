@@ -15,7 +15,12 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 
+/** 분석 작업의 DB 저장, Redis 큐 등록, 결과 캐시를 담당합니다. */
 @Service
+/**
+ * FeedbackMe 백엔드의 FeedbackJobService 구성 요소입니다.
+ * 이 파일은 com.jyk.feedbackme.service 계층의 책임을 담당합니다.
+ */
 public class FeedbackJobService {
     private static final String QUEUE_KEY = "feedback:queue";
     private static final String CACHE_PREFIX = "feedback:result:";
@@ -31,6 +36,7 @@ public class FeedbackJobService {
         this.creditService = creditService;
     }
 
+    /** 작업을 생성하고 캐시가 있으면 즉시 완료, 없으면 Redis 큐에 등록합니다. */
     @Transactional
     public Long enqueue(AppUser user, String jobUrl, String companyName, String jobTitle, String attachmentName,
                         String jobDescription, String attachmentText, List<String> base64Images) {
@@ -51,7 +57,9 @@ public class FeedbackJobService {
         return history.getId();
     }
 
+    /** 동일 입력의 이전 분석 결과를 조회합니다. */
     public String cachedResult(FeedbackHistory history) { return redis.opsForValue().get(cacheKey(history)); }
+    /** 분석 결과를 버전이 포함된 키로 Redis에 저장합니다. */
     public void cacheResult(FeedbackHistory history, String result) { redis.opsForValue().set(cacheKey(history), result, Duration.ofSeconds(cacheTtlSeconds)); }
     public Integer queuePosition(Long id) {
         List<String> ids = redis.opsForList().range(QUEUE_KEY, 0, -1);

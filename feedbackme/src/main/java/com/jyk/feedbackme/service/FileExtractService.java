@@ -21,6 +21,10 @@ import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Service
+/**
+ * FeedbackMe 백엔드의 FileExtractService 구성 요소입니다.
+ * 이 파일은 com.jyk.feedbackme.service 계층의 책임을 담당합니다.
+ */
 public class FileExtractService {
 
     private static final Logger log = LoggerFactory.getLogger(FileExtractService.class);

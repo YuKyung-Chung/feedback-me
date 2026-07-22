@@ -1,5 +1,7 @@
 package com.jyk.feedbackme.service;
 
+import com.jyk.feedbackme.analysis.AnalysisModelRouter;
+import com.jyk.feedbackme.analysis.AnalysisStep;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
@@ -16,7 +18,12 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
+/** OpenAI Responses API 호출과 공통 재시도·응답 파싱을 담당합니다. */
 @Service
+/**
+ * FeedbackMe 백엔드의 OpenAiClient 구성 요소입니다.
+ * 이 파일은 com.jyk.feedbackme.service 계층의 책임을 담당합니다.
+ */
 public class OpenAiClient {
 
     private static final Logger log = LoggerFactory.getLogger(OpenAiClient.class);
@@ -26,25 +33,25 @@ public class OpenAiClient {
     @Value("${openai.api-key:}")
     private String apiKey;
 
-    @Value("${openai.models.report:gpt-5.6-terra}")
-    private String legacyFeedbackModel;
-
     @Value("${feedback.analysis.prompt-version:v1.0.0}")
     private String promptVersion;
 
     private final PromptLoader promptLoader;
+    private final AnalysisModelRouter modelRouter;
     private final HttpClient httpClient;
 
     @Autowired
-    public OpenAiClient(PromptLoader promptLoader) {
-        this(promptLoader, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build());
+    public OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter) {
+        this(promptLoader, modelRouter, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build());
     }
 
-    OpenAiClient(PromptLoader promptLoader, HttpClient httpClient) {
+    OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter, HttpClient httpClient) {
         this.promptLoader = promptLoader;
+        this.modelRouter = modelRouter;
         this.httpClient = httpClient;
     }
 
+    /** 기존 OpenAI single-step 기준선용 보고서 단일 호출입니다. */
     public String analyze(String jobDescription, String attachmentText) throws Exception {
         String prompt = promptLoader.load("legacy-feedback", promptVersion, Map.of(
                 "jobPosting", jobDescription,
@@ -53,9 +60,10 @@ public class OpenAiClient {
                         : attachmentText,
                 "candidateInputType", "Candidate resume or portfolio text"
         ));
-        return callResponsesApi(textContent(prompt));
+        return callResponsesApi(textContent(prompt), modelRouter.modelFor(AnalysisStep.REPORT));
     }
 
+    /** PDF 페이지 이미지 입력을 현재 단일 Vision 호출로 처리합니다. */
     public String analyzeWithVision(String jobDescription, List<String> base64Images) throws Exception {
         String prompt = promptLoader.load("legacy-feedback", promptVersion, Map.of(
                 "jobPosting", jobDescription,
@@ -70,7 +78,12 @@ public class OpenAiClient {
                     .put("image_url", "data:image/png;base64," + base64Image)
                     .put("detail", "high"));
         }
-        return callResponsesApi(content);
+        return callResponsesApi(content, modelRouter.modelFor(AnalysisStep.REPORT));
+    }
+
+    /** 하네스 단계에 맞는 모델로 프롬프트를 실행합니다. */
+    public String analyzeStep(AnalysisStep step, String prompt) throws Exception {
+        return callResponsesApi(textContent(prompt), modelRouter.modelFor(step));
     }
 
     private JSONArray textContent(String prompt) {
@@ -79,14 +92,15 @@ public class OpenAiClient {
                 .put("text", prompt));
     }
 
-    private String callResponsesApi(JSONArray content) throws Exception {
+    /** API 키 검증, HTTP 호출, 일시 오류 재시도, 토큰 로그, 응답 파싱을 수행합니다. */
+    private String callResponsesApi(JSONArray content, String model) throws Exception {
         String normalizedApiKey = apiKey == null ? "" : apiKey.trim();
         if (normalizedApiKey.isBlank()) {
             throw new IllegalStateException("OpenAI API key is missing. Set OPENAI_API_KEY.");
         }
 
         JSONObject body = new JSONObject()
-                .put("model", legacyFeedbackModel)
+                .put("model", model)
                 .put("reasoning", new JSONObject().put("effort", "low"))
                 .put("input", new JSONArray().put(new JSONObject()
                         .put("role", "user")
@@ -109,7 +123,7 @@ public class OpenAiClient {
             }
             Duration delay = retryDelay(response, attempt);
             log.warn("Retrying OpenAI request. model={}, attempt={}, status={}, delayMs={}",
-                    legacyFeedbackModel, attempt, response.statusCode(), delay.toMillis());
+                    model, attempt, response.statusCode(), delay.toMillis());
             Thread.sleep(delay.toMillis());
         }
 
@@ -123,7 +137,7 @@ public class OpenAiClient {
         JSONObject json = new JSONObject(response.body());
         JSONObject usage = json.optJSONObject("usage");
         log.info("OpenAI analysis completed. model={}, durationMs={}, inputTokens={}, outputTokens={}",
-                legacyFeedbackModel, durationMs,
+                model, durationMs,
                 usage == null ? 0 : usage.optInt("input_tokens"),
                 usage == null ? 0 : usage.optInt("output_tokens"));
         return extractOutputText(json);

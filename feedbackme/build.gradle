@@ -65,11 +65,17 @@ tasks.named('test') {
 	useJUnitPlatform()
 }
 
-tasks.register('baselineEvaluation', JavaExec) {
+tasks.register('openaiBaselineEvaluation', JavaExec) {
 	group = 'verification'
-	description = 'Runs the pre-harness FeedbackMe evaluation cases and stores raw results.'
+	description = 'Runs the OpenAI single-step baseline evaluation cases and stores raw results.'
 	dependsOn testClasses
 	classpath = sourceSets.test.runtimeClasspath
 	mainClass = 'com.jyk.feedbackme.evaluation.BaselineEvaluationRunner'
 	workingDir = rootDir
+}
+
+tasks.register('baselineEvaluation') {
+	group = 'verification'
+	description = 'Alias for openaiBaselineEvaluation.'
+	dependsOn openaiBaselineEvaluation
 }

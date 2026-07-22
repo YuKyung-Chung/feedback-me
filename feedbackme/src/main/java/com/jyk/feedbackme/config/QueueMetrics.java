@@ -8,6 +8,10 @@ import org.springframework.stereotype.Component;
 
 @Component // 스프링이 켜질 때 이 클래스를 자동으로 빈(Bean)으로 등록합니다.
 @Profile("!test")
+/**
+ * FeedbackMe 백엔드의 QueueMetrics 구성 요소입니다.
+ * 이 파일은 com.jyk.feedbackme.config 계층의 책임을 담당합니다.
+ */
 public class QueueMetrics {
 
     private final StringRedisTemplate redisTemplate;

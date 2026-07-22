@@ -19,6 +19,10 @@ import java.time.LocalDateTime;
 @Table(name = "user_credit_balance")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+/**
+ * FeedbackMe 백엔드의 UserCreditBalance 구성 요소입니다.
+ * 이 파일은 com.jyk.feedbackme.domain 계층의 책임을 담당합니다.
+ */
 public class UserCreditBalance {
 
     @Id

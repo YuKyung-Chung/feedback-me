@@ -13,6 +13,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 
 @Service
+/**
+ * FeedbackMe 백엔드의 CreditService 구성 요소입니다.
+ * 이 파일은 com.jyk.feedbackme.service 계층의 책임을 담당합니다.
+ */
 public class CreditService {
 
     private static final int FREE_SIGNUP_CREDITS = 1;

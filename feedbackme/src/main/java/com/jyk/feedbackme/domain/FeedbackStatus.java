@@ -1,6 +1,10 @@
 package com.jyk.feedbackme.domain;
 
 // 요청의 진행 상태를 나타낼 Enum 클래스
+/**
+ * FeedbackMe 백엔드의 FeedbackStatus 구성 요소입니다.
+ * 이 파일은 com.jyk.feedbackme.domain 계층의 책임을 담당합니다.
+ */
 public enum FeedbackStatus {
     PENDING,     // 큐에 대기 중
     PROCESSING,  // AI 분석 진행 중

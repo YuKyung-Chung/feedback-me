@@ -4,7 +4,7 @@ import com.jyk.feedbackme.FeedbackmeApplication;
 import com.jyk.feedbackme.dto.CrawledJobPosting;
 import com.jyk.feedbackme.service.CrawlingService;
 import com.jyk.feedbackme.service.FileExtractService;
-import com.jyk.feedbackme.service.GeminiService;
+import com.jyk.feedbackme.service.OpenAiClient;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -41,19 +41,19 @@ public final class BaselineEvaluationRunner {
         List<String> candidateTypes = selectValues("EVALUATION_CANDIDATES", List.of("sample", "personal"));
         validateInputs(baselineRoot, selectedCaseIds, candidateTypes);
 
-        String apiKey = resolveGeminiApiKey(evaluationRoot.getParent().resolve(".env"));
+        String apiKey = resolveOpenAiApiKey(evaluationRoot.getParent().resolve(".env"));
         String runId = "baseline-" + OffsetDateTime.now(SEOUL).format(RUN_ID_FORMAT);
         Path runRoot = evaluationRoot.resolve("runs").resolve(runId);
         Files.createDirectories(runRoot);
 
         List<Map<String, Object>> allMetrics = new ArrayList<>();
         try (ConfigurableApplicationContext context = new SpringApplicationBuilder(FeedbackmeApplication.class)
-                .profiles("test", "legacy-gemini-baseline")
+                .profiles("test")
                 .web(WebApplicationType.NONE)
-                .run("--gemini.api-key=" + apiKey)) {
+                .run("--openai.api-key=" + apiKey)) {
             CrawlingService crawlingService = context.getBean(CrawlingService.class);
             FileExtractService fileExtractService = context.getBean(FileExtractService.class);
-            GeminiService geminiService = context.getBean(GeminiService.class);
+            OpenAiClient openAiClient = context.getBean(OpenAiClient.class);
 
             for (String caseId : selectedCaseIds) {
                 Path caseRoot = baselineRoot.resolve(caseId);
@@ -71,21 +71,21 @@ public final class BaselineEvaluationRunner {
                 if (candidateTypes.contains("sample")) {
                     allMetrics.add(runCandidate(
                             caseId, "sample", caseRoot.resolve("candidate.docx"), jobDescription,
-                            caseRunRoot, fileExtractService, geminiService
+                            caseRunRoot, fileExtractService, openAiClient
                     ));
                 }
                 if (candidateTypes.contains("personal")) {
                     allMetrics.add(runCandidate(
                             caseId, "personal", caseRoot.resolve("candidate-personal.pdf"), jobDescription,
-                            caseRunRoot, fileExtractService, geminiService
+                            caseRunRoot, fileExtractService, openAiClient
                     ));
                 }
             }
         } finally {
             writeJson(runRoot.resolve("summary.json"), Map.of(
                     "runId", runId,
-                    "model", "gemini-2.5-flash-lite",
-                    "promptVersion", "legacy-inline",
+                    "model", System.getenv().getOrDefault("OPENAI_LEGACY_FEEDBACK_MODEL", "gpt-5.6-terra"),
+                    "promptVersion", "legacy-feedback/v1.0.0",
                     "schemaVersion", "none",
                     "completedAt", OffsetDateTime.now(SEOUL).toString(),
                     "results", allMetrics
@@ -102,7 +102,7 @@ public final class BaselineEvaluationRunner {
             String jobDescription,
             Path caseRunRoot,
             FileExtractService fileExtractService,
-            GeminiService geminiService
+            OpenAiClient openAiClient
     ) {
         long startedAt = System.nanoTime();
         OffsetDateTime executedAt = OffsetDateTime.now(SEOUL);
@@ -121,11 +121,11 @@ public final class BaselineEvaluationRunner {
 
             String result;
             if (isPdf(candidatePath)) {
-                result = geminiService.getFeedBackWithVision(
+                result = openAiClient.analyzeWithVision(
                         jobDescription, fileExtractService.pdfToBase64Images(file)
                 );
             } else {
-                result = geminiService.getFeedBack(jobDescription, fileExtractService.extract(file));
+                result = openAiClient.analyze(jobDescription, fileExtractService.extract(file));
             }
 
             Files.writeString(
@@ -217,8 +217,8 @@ public final class BaselineEvaluationRunner {
         return new JobInput(url, snapshot);
     }
 
-    private static String resolveGeminiApiKey(Path envPath) throws IOException {
-        String fromEnvironment = System.getenv("GEMINI_API_KEY");
+    private static String resolveOpenAiApiKey(Path envPath) throws IOException {
+        String fromEnvironment = System.getenv("OPENAI_API_KEY");
         if (fromEnvironment != null && !fromEnvironment.isBlank()) {
             return fromEnvironment.trim();
         }
@@ -226,15 +226,15 @@ public final class BaselineEvaluationRunner {
         if (Files.isRegularFile(envPath)) {
             return Files.readAllLines(envPath, StandardCharsets.UTF_8).stream()
                     .map(String::trim)
-                    .filter(line -> line.startsWith("GEMINI_API_KEY="))
-                    .map(line -> line.substring("GEMINI_API_KEY=".length()).trim())
+                    .filter(line -> line.startsWith("OPENAI_API_KEY="))
+                    .map(line -> line.substring("OPENAI_API_KEY=".length()).trim())
                     .map(BaselineEvaluationRunner::stripQuotes)
                     .filter(line -> !line.isBlank())
                     .findFirst()
-                    .orElseThrow(() -> new IllegalStateException("GEMINI_API_KEY is missing in " + envPath));
+                    .orElseThrow(() -> new IllegalStateException("OPENAI_API_KEY is missing in " + envPath));
         }
 
-        throw new IllegalStateException("Set GEMINI_API_KEY or add it to " + envPath);
+        throw new IllegalStateException("Set OPENAI_API_KEY or add it to " + envPath);
     }
 
     private static String stripQuotes(String value) {

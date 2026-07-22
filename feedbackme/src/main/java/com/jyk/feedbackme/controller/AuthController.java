@@ -21,6 +21,10 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
+/**
+ * FeedbackMe 백엔드의 AuthController 구성 요소입니다.
+ * 이 파일은 com.jyk.feedbackme.controller 계층의 책임을 담당합니다.
+ */
 public class AuthController {
 
     private final AuthService authService;

@@ -38,3 +38,6 @@ Remove-Item Env:EVALUATION_CANDIDATES -ErrorAction SilentlyContinue
 ```
 
 결과는 `evaluation/runs/baseline-<실행시각>/`에 저장됩니다. 전체 실행은 Gemini API를 10회 호출하며, PDF 입력 5건은 Vision 요청으로 처리됩니다.
+# Evaluation baseline policy
+
+The `baseline/` cases represent the OpenAI single-step baseline. The comparison target is `harness/`, which will use the same inputs with the multi-step OpenAI workflow. Historical Gemini results are not used as a quality comparison baseline.

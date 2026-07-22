@@ -24,6 +24,10 @@ import java.util.List;
 
 @Service
 @Profile("legacy-gemini-baseline")
+/**
+ * FeedbackMe 백엔드의 GeminiService 구성 요소입니다.
+ * 이 파일은 com.jyk.feedbackme.service 계층의 책임을 담당합니다.
+ */
 public class GeminiService {
 
     private static final String QUEUE_KEY = "feedback:queue";
