@@ -24,14 +24,16 @@ public class AnalysisOrchestrator {
     private final DocumentChunker documentChunker;
     private final EvidenceValidator evidenceValidator;
     private final StepSchemaValidator stepSchemaValidator;
+    private final AnalysisRetryPolicy retryPolicy;
     @Value("${feedback.analysis.prompt-version:v1.0.0}") private String promptVersion;
 
-    public AnalysisOrchestrator(PromptLoader promptLoader, OpenAiClient openAiClient, DocumentChunker documentChunker, EvidenceValidator evidenceValidator, StepSchemaValidator stepSchemaValidator) {
+    public AnalysisOrchestrator(PromptLoader promptLoader, OpenAiClient openAiClient, DocumentChunker documentChunker, EvidenceValidator evidenceValidator, StepSchemaValidator stepSchemaValidator, AnalysisRetryPolicy retryPolicy) {
         this.promptLoader = promptLoader;
         this.openAiClient = openAiClient;
         this.documentChunker = documentChunker;
         this.evidenceValidator = evidenceValidator;
         this.stepSchemaValidator = stepSchemaValidator;
+        this.retryPolicy = retryPolicy;
     }
 
     /** 공고·지원자·매칭·갭·보고서 단계를 순서대로 실행합니다. */
@@ -92,13 +94,21 @@ public class AnalysisOrchestrator {
     /** 프롬프트를 렌더링하고 해당 단계 모델을 호출하며 빈 응답을 차단합니다. */
     private String run(AnalysisStep step, String promptName, Map<String, String> variables) throws Exception {
         String prompt = promptLoader.load(promptName, promptVersion, variables);
-        String output = openAiClient.analyzeStep(step, prompt);
-        if (output == null || output.isBlank()) {
-            throw new IllegalStateException("Analysis step returned an empty result: " + step);
+        Exception lastError = null;
+        for (int attempt = 1; attempt <= AnalysisRetryPolicy.MAX_ATTEMPTS; attempt++) {
+            try {
+                String output = openAiClient.analyzeStep(step, prompt);
+                if (output == null || output.isBlank()) throw new IllegalStateException("Analysis step returned an empty result: " + step);
+                StepSchemaValidationResult schema = stepSchemaValidator.validate(step, output);
+                if (!schema.valid()) throw new IllegalStateException("Invalid schema at " + step + ": " + schema.errors());
+                return output;
+            } catch (Exception error) {
+                lastError = error;
+                if (!retryPolicy.isRetryable(error) || attempt == AnalysisRetryPolicy.MAX_ATTEMPTS) throw error;
+                Thread.sleep(retryPolicy.backoffMillis(attempt));
+            }
         }
-        StepSchemaValidationResult schema = stepSchemaValidator.validate(step, output);
-        if (!schema.valid()) throw new IllegalStateException("Invalid schema at " + step + ": " + schema.errors());
-        return output;
+        throw lastError;
     }
 
     private String safe(String value) {

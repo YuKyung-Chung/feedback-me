@@ -81,6 +81,9 @@ public class FeedbackHistory {
     @Column(columnDefinition = "LONGTEXT")
     private String stepResultsJson;
 
+    private long estimatedOutputTokens;
+    private double estimatedCostUsd;
+
     @Builder
     public FeedbackHistory(AppUser user, String jobUrl, String companyName, String jobTitle, String attachmentName, String jobDescription, String attachmentText, String base64Images, FeedbackStatus status) {
         this.user = user;
@@ -134,6 +137,14 @@ public class FeedbackHistory {
         this.updatedAt = LocalDateTime.now();
     }
 
+    /** 재시도 가능한 실패를 대기 상태로 되돌립니다. */
+    public void prepareRetry(String errorMessage) {
+        this.retryCount++;
+        this.lastError = errorMessage;
+        this.status = FeedbackStatus.PENDING;
+        this.updatedAt = LocalDateTime.now();
+    }
+
     /** 실행 시점의 청크 목록과 근거 검증 상태를 체크포인트로 기록합니다. */
     public void recordEvidenceCheckpoint(String chunksJson, String validationStatus) {
         this.documentChunksJson = chunksJson;
@@ -150,6 +161,13 @@ public class FeedbackHistory {
     public void recordStepResult(String step, String result) {
         String entry = "{\"step\":\"" + step + "\",\"result\":\"" + result.replace("\\", "\\\\").replace("\"", "\\\"") + "\"}";
         this.stepResultsJson = (this.stepResultsJson == null || this.stepResultsJson.isBlank()) ? "[" + entry + "]" : this.stepResultsJson.replaceAll("\\]$", "," + entry + "]");
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /** 단계 결과의 추정 출력 토큰과 비용을 누적합니다. */
+    public void recordEstimatedCost(long outputTokens, double costUsd) {
+        this.estimatedOutputTokens += outputTokens;
+        this.estimatedCostUsd += costUsd;
         this.updatedAt = LocalDateTime.now();
     }
 }

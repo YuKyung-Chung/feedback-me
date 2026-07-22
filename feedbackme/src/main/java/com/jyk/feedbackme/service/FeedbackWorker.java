@@ -111,6 +111,8 @@ public class FeedbackWorker {
         if (output == null || output.isBlank()) return;
         transactionTemplate.executeWithoutResult(tx -> feedbackHistoryRepository.findById(historyId).ifPresent(history -> {
             history.recordStepResult(step.name(), output);
+            long estimatedTokens = Math.max(1, output.length() / 4L);
+            history.recordEstimatedCost(estimatedTokens, estimatedTokens * 15.0 / 1_000_000.0);
             feedbackHistoryRepository.save(history);
         }));
     }
@@ -165,12 +167,26 @@ public class FeedbackWorker {
     private void updateToFailed(Long historyId, Exception error) {
         transactionTemplate.executeWithoutResult(status -> feedbackHistoryRepository.findById(historyId)
                 .ifPresent(history -> {
-                    history.recordRetry(error.getMessage() != null ? error.getMessage() : error.getClass().getSimpleName());
-                    history.failFeedback(error.getMessage() != null ? error.getMessage() : error.getClass().getSimpleName());
+                    String message = error.getMessage() != null ? error.getMessage() : error.getClass().getSimpleName();
+                    if (isRetryable(error) && history.getRetryCount() < AnalysisRetryPolicy.MAX_ATTEMPTS) {
+                        history.prepareRetry(message);
+                        feedbackHistoryRepository.save(history);
+                        redisTemplate.opsForList().rightPush(QUEUE_KEY, String.valueOf(historyId));
+                        log.warn("Requeued feedback job. historyId={}, retryCount={}", historyId, history.getRetryCount());
+                        return;
+                    }
+                    history.recordRetry(message);
+                    history.failFeedback(message);
                     feedbackHistoryRepository.save(history);
                     if (history.getUser() != null) {
                         creditService.refundForFailedAnalysis(history.getUser(), historyId);
                     }
                 }));
+    }
+
+    private boolean isRetryable(Exception error) {
+        String message = error.getMessage() == null ? "" : error.getMessage().toLowerCase();
+        return message.contains("timeout") || message.contains("timed out") || message.contains("429")
+                || message.contains("5xx") || message.contains("invalid schema") || message.contains("invalid evidence");
     }
 }
