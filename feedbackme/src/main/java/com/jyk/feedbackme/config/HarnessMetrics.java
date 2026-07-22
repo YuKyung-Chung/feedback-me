@@ -33,9 +33,11 @@ public class HarnessMetrics {
     }
 
     public void recordRequest(String model) { Counter.builder("feedbackme_openai_requests_total").tag("model", model).register(registry).increment(); }
-    public void recordTokens(String model, long input, long output) {
+    public void recordTokens(String model, long input, long cachedInput, long output, long reasoning) {
         registry.counter("feedbackme_openai_tokens_total", "model", model, "type", "input").increment(input);
+        registry.counter("feedbackme_openai_tokens_total", "model", model, "type", "cached_input").increment(cachedInput);
         registry.counter("feedbackme_openai_tokens_total", "model", model, "type", "output").increment(output);
+        registry.counter("feedbackme_openai_tokens_total", "model", model, "type", "reasoning").increment(reasoning);
     }
     public void recordCompleted() { registry.counter("feedbackme_analysis_completed_total").increment(); }
     public void recordFailed() { registry.counter("feedbackme_analysis_failed_total").increment(); }

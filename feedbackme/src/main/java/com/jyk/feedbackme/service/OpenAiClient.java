@@ -42,18 +42,20 @@ public class OpenAiClient {
     private final AnalysisModelRouter modelRouter;
     private final HttpClient httpClient;
     private final HarnessMetrics metrics;
-    private volatile OpenAiUsage lastUsage = new OpenAiUsage(0, 0, "", 0);
+    private volatile OpenAiUsage lastUsage = new OpenAiUsage(0, 0, 0, 0, "", 0);
+    private final ModelPricing modelPricing;
 
     @Autowired
-    public OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter, HarnessMetrics metrics) {
-        this(promptLoader, modelRouter, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build(), metrics);
+    public OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter, HarnessMetrics metrics, ModelPricing modelPricing) {
+        this(promptLoader, modelRouter, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build(), metrics, modelPricing);
     }
 
-    OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter, HttpClient httpClient, HarnessMetrics metrics) {
+    OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter, HttpClient httpClient, HarnessMetrics metrics, ModelPricing modelPricing) {
         this.promptLoader = promptLoader;
         this.modelRouter = modelRouter;
         this.httpClient = httpClient;
         this.metrics = metrics;
+        this.modelPricing = modelPricing;
     }
 
     public OpenAiUsage getLastUsage() { return lastUsage; }
@@ -146,9 +148,13 @@ public class OpenAiClient {
         JSONObject usage = json.optJSONObject("usage");
         long inputTokens = usage == null ? 0 : usage.optLong("input_tokens");
         long outputTokens = usage == null ? 0 : usage.optLong("output_tokens");
-        double cost = (inputTokens * 2.5 + outputTokens * 15.0) / 1_000_000.0;
-        lastUsage = new OpenAiUsage(inputTokens, outputTokens, model, cost);
-        metrics.recordTokens(model, inputTokens, outputTokens);
+        JSONObject inputDetails = usage == null ? null : usage.optJSONObject("input_tokens_details");
+        JSONObject outputDetails = usage == null ? null : usage.optJSONObject("output_tokens_details");
+        long cachedInputTokens = inputDetails == null ? 0 : inputDetails.optLong("cached_tokens");
+        long reasoningTokens = outputDetails == null ? 0 : outputDetails.optLong("reasoning_tokens");
+        double cost = modelPricing.calculate(model, inputTokens, cachedInputTokens, outputTokens);
+        lastUsage = new OpenAiUsage(inputTokens, cachedInputTokens, outputTokens, reasoningTokens, model, cost);
+        metrics.recordTokens(model, inputTokens, cachedInputTokens, outputTokens, reasoningTokens);
         metrics.recordCost(cost);
         log.info("OpenAI analysis completed. model={}, durationMs={}, inputTokens={}, outputTokens={}",
                 model, durationMs,
