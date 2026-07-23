@@ -130,6 +130,7 @@ public final class HarnessComparisonRunner {
     }
 
     private static void writeJson(Path path, Object value) throws IOException {
-        Files.writeString(path, new org.json.JSONObject(value).toString(2), StandardCharsets.UTF_8);
+        org.json.JSONObject json = value instanceof Map<?, ?> map ? new org.json.JSONObject(map) : new org.json.JSONObject();
+        Files.writeString(path, json.toString(2), StandardCharsets.UTF_8);
     }
 }
