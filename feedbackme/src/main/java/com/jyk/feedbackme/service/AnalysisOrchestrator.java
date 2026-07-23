@@ -63,17 +63,17 @@ public class AnalysisOrchestrator {
         String jobEvidence = documentChunker.formatForPrompt(documentChunker.chunk("job", jobPosting));
         String candidateEvidence = documentChunker.formatForPrompt(documentChunker.chunk("candidate", candidateMaterial));
         onStepCompleted.accept(AnalysisStep.JOB_ANALYSIS, null);
-        String jobAnalysis = checkpoint.containsKey(AnalysisStep.JOB_ANALYSIS) ? checkpoint.get(AnalysisStep.JOB_ANALYSIS) : run(AnalysisStep.JOB_ANALYSIS, "job-analysis", Map.of("jobPosting", jobEvidence));
+        String jobAnalysis = checkpoint.containsKey(AnalysisStep.JOB_ANALYSIS) ? checkpoint.get(AnalysisStep.JOB_ANALYSIS) : runValidated(AnalysisStep.JOB_ANALYSIS, "job-analysis", Map.of("jobPosting", jobEvidence), chunks);
         onStepCompleted.accept(AnalysisStep.JOB_ANALYSIS, jobAnalysis);
         validateEvidence(AnalysisStep.JOB_ANALYSIS, jobAnalysis, chunks);
         onStepCompleted.accept(AnalysisStep.CANDIDATE_ANALYSIS, null);
-        String candidateAnalysis = checkpoint.containsKey(AnalysisStep.CANDIDATE_ANALYSIS) ? checkpoint.get(AnalysisStep.CANDIDATE_ANALYSIS) : run(AnalysisStep.CANDIDATE_ANALYSIS, "candidate-analysis", Map.of("candidateMaterial", candidateEvidence));
+        String candidateAnalysis = checkpoint.containsKey(AnalysisStep.CANDIDATE_ANALYSIS) ? checkpoint.get(AnalysisStep.CANDIDATE_ANALYSIS) : runValidated(AnalysisStep.CANDIDATE_ANALYSIS, "candidate-analysis", Map.of("candidateMaterial", candidateEvidence), chunks);
         onStepCompleted.accept(AnalysisStep.CANDIDATE_ANALYSIS, candidateAnalysis);
         validateEvidence(AnalysisStep.CANDIDATE_ANALYSIS, candidateAnalysis, chunks);
         onStepCompleted.accept(AnalysisStep.MATCHING, null);
-        String matching = checkpoint.containsKey(AnalysisStep.MATCHING) ? checkpoint.get(AnalysisStep.MATCHING) : run(AnalysisStep.MATCHING, "matching", Map.of(
+        String matching = checkpoint.containsKey(AnalysisStep.MATCHING) ? checkpoint.get(AnalysisStep.MATCHING) : runValidated(AnalysisStep.MATCHING, "matching", Map.of(
                 "jobAnalysis", jobAnalysis,
-                "candidateAnalysis", candidateAnalysis));
+                "candidateAnalysis", candidateAnalysis), chunks);
         onStepCompleted.accept(AnalysisStep.MATCHING, matching);
         validateEvidence(AnalysisStep.MATCHING, matching, chunks);
         onStepCompleted.accept(AnalysisStep.GAP_ANALYSIS, null);
@@ -111,6 +111,23 @@ public class AnalysisOrchestrator {
         if (!result.isValid()) {
             throw new IllegalStateException("Invalid evidence chunk IDs at " + step + ": " + result.invalidChunkIds());
         }
+    }
+
+    private String runValidated(AnalysisStep step, String promptName, Map<String, String> variables, List<DocumentChunk> chunks) throws Exception {
+        Exception last = null;
+        for (int attempt = 1; attempt <= AnalysisRetryPolicy.MAX_ATTEMPTS; attempt++) {
+            try {
+                String output = run(step, promptName, variables);
+                validateEvidence(step, output, chunks);
+                return output;
+            } catch (Exception error) {
+                last = error;
+                if (!retryPolicy.isRetryable(error) || attempt == AnalysisRetryPolicy.MAX_ATTEMPTS) throw error;
+                metrics.recordRetry(step.name());
+                Thread.sleep(retryPolicy.backoffMillis(attempt));
+            }
+        }
+        throw last;
     }
 
     /** 프롬프트를 렌더링하고 해당 단계 모델을 호출하며 빈 응답을 차단합니다. */

@@ -45,6 +45,21 @@ class FailureScenarioTest {
         assertEquals(3, reportCalls.get());
     }
 
+    @Test
+    void invalidEvidenceRetriesOnlyTheMatchingStep() throws Exception {
+        OpenAiClient client = Mockito.mock(OpenAiClient.class);
+        AtomicInteger matchingCalls = new AtomicInteger();
+        when(client.analyzeStep(eq(AnalysisStep.JOB_ANALYSIS), any())).thenReturn("{\"position\":\"x\",\"responsibilities\":[],\"requiredSkills\":[],\"preferredSkills\":[]}");
+        when(client.analyzeStep(eq(AnalysisStep.CANDIDATE_ANALYSIS), any())).thenReturn("{\"experiences\":[]}");
+        when(client.analyzeStep(eq(AnalysisStep.MATCHING), any())).thenAnswer(i -> matchingCalls.incrementAndGet() == 1 ? "{\"matches\":[],\"evidenceChunkIds\":[\"invalid-999\"]}" : "{\"matches\":[]}");
+        when(client.analyzeStep(eq(AnalysisStep.GAP_ANALYSIS), any())).thenReturn("{\"gaps\":[]}");
+        when(client.analyzeStep(eq(AnalysisStep.REPORT), any())).thenReturn("report");
+        when(client.analyzeStep(eq(AnalysisStep.VERIFICATION), any())).thenReturn("{\"valid\":true,\"issues\":[],\"correctedReport\":\"verified\"}");
+
+        assertEquals("verified", orchestrator(client).analyze("job", "candidate"));
+        assertEquals(2, matchingCalls.get());
+    }
+
     private AnalysisOrchestrator orchestrator(OpenAiClient client) {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         PromptLoader prompts = Mockito.mock(PromptLoader.class);
