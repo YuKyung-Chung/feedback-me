@@ -53,3 +53,14 @@ Remove-Item Env:EVALUATION_CANDIDATES -ErrorAction SilentlyContinue
 # Evaluation baseline policy
 
 The `baseline/` cases represent the OpenAI single-step baseline. The comparison target is `harness/`, which will use the same inputs with the multi-step OpenAI workflow. Historical Gemini results are not used as a quality comparison baseline.
+
+## Failure injection
+
+Deterministic recovery tests can inject failures with `STEP:TYPE:COUNT` entries. Supported types are `SCHEMA`, `EVIDENCE`, and `TIMEOUT`.
+
+```powershell
+$env:FEEDBACK_FAILURE_INJECTION="MATCHING:SCHEMA:1"
+./gradlew harnessComparisonEvaluation
+```
+
+The setting is empty by default and does not affect normal service execution.

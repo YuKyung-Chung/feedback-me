@@ -44,18 +44,20 @@ public class OpenAiClient {
     private final HarnessMetrics metrics;
     private volatile OpenAiUsage lastUsage = new OpenAiUsage(0, 0, 0, 0, "", 0);
     private final ModelPricing modelPricing;
+    private final FailureInjectionPolicy failureInjectionPolicy;
 
     @Autowired
-    public OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter, HarnessMetrics metrics, ModelPricing modelPricing) {
-        this(promptLoader, modelRouter, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build(), metrics, modelPricing);
+    public OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter, HarnessMetrics metrics, ModelPricing modelPricing, FailureInjectionPolicy failureInjectionPolicy) {
+        this(promptLoader, modelRouter, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build(), metrics, modelPricing, failureInjectionPolicy);
     }
 
-    OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter, HttpClient httpClient, HarnessMetrics metrics, ModelPricing modelPricing) {
+    OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter, HttpClient httpClient, HarnessMetrics metrics, ModelPricing modelPricing, FailureInjectionPolicy failureInjectionPolicy) {
         this.promptLoader = promptLoader;
         this.modelRouter = modelRouter;
         this.httpClient = httpClient;
         this.metrics = metrics;
         this.modelPricing = modelPricing;
+        this.failureInjectionPolicy = failureInjectionPolicy;
     }
 
     public OpenAiUsage getLastUsage() { return lastUsage; }
@@ -92,6 +94,8 @@ public class OpenAiClient {
 
     /** 하네스 단계에 맞는 모델로 프롬프트를 실행합니다. */
     public String analyzeStep(AnalysisStep step, String prompt) throws Exception {
+        String injected = failureInjectionPolicy.beforeCall(step);
+        if (injected != null) return injected;
         return callResponsesApi(textContent(prompt), modelRouter.modelFor(step));
     }
 

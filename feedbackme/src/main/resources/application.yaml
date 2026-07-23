@@ -41,6 +41,8 @@ payments:
   dev-mode: ${PAYMENT_DEV_MODE:true}
 
 feedback:
+  evaluation:
+    failure-injection: ${FEEDBACK_FAILURE_INJECTION:}
   analysis:
     provider: openai
     prompt-version: v1.0.0
