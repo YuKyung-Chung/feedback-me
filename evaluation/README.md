@@ -60,6 +60,8 @@ Deterministic recovery tests can inject failures with `STEP:TYPE:COUNT` entries.
 
 ```powershell
 $env:FEEDBACK_FAILURE_INJECTION="MATCHING:SCHEMA:1"
+$env:EVALUATION_MODES="harness"
+$env:EVALUATION_REPETITIONS="1"
 ./gradlew harnessComparisonEvaluation
 ```
 

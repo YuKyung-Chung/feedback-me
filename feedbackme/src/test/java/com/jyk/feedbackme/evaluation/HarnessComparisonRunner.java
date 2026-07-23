@@ -33,6 +33,7 @@ public final class HarnessComparisonRunner {
         Path evaluation = Path.of("..").resolve("evaluation").toAbsolutePath().normalize();
         Path baseline = evaluation.resolve("baseline");
         int repetitions = Integer.parseInt(System.getenv().getOrDefault("EVALUATION_REPETITIONS", "3"));
+        List<String> modes = List.of(System.getenv().getOrDefault("EVALUATION_MODES", "single-step,harness").split(","));
         String runId = "comparison-" + OffsetDateTime.now(SEOUL).format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
         Path runRoot = evaluation.resolve("runs").resolve(runId);
         Files.createDirectories(runRoot);
@@ -52,8 +53,8 @@ public final class HarnessComparisonRunner {
                     if (!Files.isRegularFile(candidate)) continue;
                     String material = extract(extractor, candidate);
                     for (int repetition = 1; repetition <= repetitions; repetition++) {
-                        results.add(run("single-step", id, candidateName, repetition, job, material, runRoot, client, null));
-                        results.add(run("harness", id, candidateName, repetition, job, material, runRoot, client, orchestrator));
+                        if (modes.contains("single-step")) results.add(run("single-step", id, candidateName, repetition, job, material, runRoot, client, null));
+                        if (modes.contains("harness")) results.add(run("harness", id, candidateName, repetition, job, material, runRoot, client, orchestrator));
                     }
                 }
             }
@@ -90,6 +91,10 @@ public final class HarnessComparisonRunner {
             metric.put("status", "FAILED"); metric.put("error", e.toString());
         }
         metric.put("durationSeconds", Duration.ofNanos(System.nanoTime() - started).toMillis() / 1000.0);
+        try {
+            Path dir = root.resolve(id); Files.createDirectories(dir);
+            writeJson(dir.resolve(mode + "-" + filename + "-run-" + repetition + "-metrics.json"), metric);
+        } catch (IOException ignored) { }
         return metric;
     }
 
