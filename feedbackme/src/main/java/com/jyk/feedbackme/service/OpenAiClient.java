@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -44,20 +45,20 @@ public class OpenAiClient {
     private final HarnessMetrics metrics;
     private volatile OpenAiUsage lastUsage = new OpenAiUsage(0, 0, 0, 0, "", 0);
     private final ModelPricing modelPricing;
-    private final FailureInjectionPolicy failureInjectionPolicy;
+    private final ObjectProvider<FailureInjector> failureInjector;
 
     @Autowired
-    public OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter, HarnessMetrics metrics, ModelPricing modelPricing, FailureInjectionPolicy failureInjectionPolicy) {
-        this(promptLoader, modelRouter, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build(), metrics, modelPricing, failureInjectionPolicy);
+    public OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter, HarnessMetrics metrics, ModelPricing modelPricing, ObjectProvider<FailureInjector> failureInjector) {
+        this(promptLoader, modelRouter, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build(), metrics, modelPricing, failureInjector);
     }
 
-    OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter, HttpClient httpClient, HarnessMetrics metrics, ModelPricing modelPricing, FailureInjectionPolicy failureInjectionPolicy) {
+    OpenAiClient(PromptLoader promptLoader, AnalysisModelRouter modelRouter, HttpClient httpClient, HarnessMetrics metrics, ModelPricing modelPricing, ObjectProvider<FailureInjector> failureInjector) {
         this.promptLoader = promptLoader;
         this.modelRouter = modelRouter;
         this.httpClient = httpClient;
         this.metrics = metrics;
         this.modelPricing = modelPricing;
-        this.failureInjectionPolicy = failureInjectionPolicy;
+        this.failureInjector = failureInjector;
     }
 
     public OpenAiUsage getLastUsage() { return lastUsage; }
@@ -94,7 +95,7 @@ public class OpenAiClient {
 
     /** 하네스 단계에 맞는 모델로 프롬프트를 실행합니다. */
     public String analyzeStep(AnalysisStep step, String prompt) throws Exception {
-        String injected = failureInjectionPolicy.beforeCall(step);
+        String injected = failureInjector.getIfAvailable(() -> currentStep -> null).beforeCall(step);
         if (injected != null) return injected;
         return callResponsesApi(textContent(prompt), modelRouter.modelFor(step));
     }
